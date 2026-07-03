@@ -265,6 +265,7 @@
       <button class="wa" id="waBtn" style="grid-column:1/-1">🟢 שלח בוואטסאפ</button>
       <button id="copyBtn">📋 העתק טקסט</button>
       <button id="jsonBtn">⬇️ הורד JSON</button>
+      <button id="newBtn" style="grid-column:1/-1">🆕 דוח חדש (רוקן טופס)</button>
       <button class="close" id="closeSum">סגור</button>
     </div>
   </div>
@@ -365,7 +366,16 @@ function loadState(){
   try{ const s = JSON.parse(localStorage.getItem(STORE_KEY)); return s && s.answers ? s : {answers:{}, photos:{}}; }
   catch(e){ return {answers:{}, photos:{}}; }
 }
-function saveState(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+function saveState(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  catch(e){
+    // חריגת מכסה (בד"כ יותר מדי תמונות) — לפחות נשמור את התשובות בלי התמונות
+    try{
+      localStorage.setItem(STORE_KEY, JSON.stringify({answers:state.answers, photos:{}}));
+      toast('⚠️ יותר מדי תמונות לשמירה — התשובות נשמרו, צמצם תמונות');
+    }catch(e2){}
+  }
+}
 function getA(qid){ return state.answers[qid]; }
 function setA(qid,val){ state.answers[qid]=val; saveState(); }
 
@@ -458,10 +468,13 @@ function renderChoice(q){
     b.innerHTML=`<span>${escapeHtml(opt)}</span><span class="check">${checkSvg()}</span>`;
     b.onclick=()=>{
       setA(q.id, opt);
+      // עדכון הבחירה במקום — בלי render() מלא, כדי לא לקפוץ לראש העמוד
+      wrap.querySelectorAll('.opt').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel');
       // toggle detail field
       const dw=main.querySelector(`[data-detail-for="${q.id}"]`);
       if(dw) dw.style.display = (opt===q.detailOn)?'block':'none';
-      render(); flashSave();
+      updateNavCounts(); flashSave();
     };
     wrap.appendChild(b);
   });
@@ -684,6 +697,25 @@ function openSummary(){
 document.getElementById('closeSum').onclick=()=>sumBackdrop.classList.remove('open');
 sumBackdrop.onclick=e=>{ if(e.target===sumBackdrop) sumBackdrop.classList.remove('open'); };
 
+/* ניקוי הטופס לדוח חדש וריק */
+function resetForm(){
+  state={answers:{}, photos:{}};
+  saveState();
+  current=0;
+  sumBackdrop.classList.remove('open');
+  render();
+  toast('טופס חדש — הכול ריק ✅');
+}
+document.getElementById('newBtn').onclick=()=>{
+  if(confirm('להתחיל דוח חדש? כל מה שמילאת בטופס הנוכחי יימחק.')) resetForm();
+};
+/* אחרי שליחה — הצעה לרוקן לדוח הבא (השהיה קלה כדי שוואטסאפ ייפתח קודם) */
+function offerReset(){
+  setTimeout(()=>{
+    if(confirm('אם סיימת לשלוח את הדוח — להתחיל דוח חדש וריק?\n(הנתונים הנוכחיים יימחקו)')) resetForm();
+  }, 900);
+}
+
 function answerText(q){
   const a=getA(q.id);
   let base = Array.isArray(a)?a.join(', '):(a||'');
@@ -691,14 +723,30 @@ function answerText(q){
   if(det && (a===q.detailOn)) base += ` — ${det}`;
   return base;
 }
+/* אימוג'י סטטוס לפי התשובה — כדי שקורא ההודעה יזהה במבט אחד */
+function answerEmoji(val){
+  if(!val) return '▫️';
+  const v=String(val);
+  if(v.startsWith('לא רלוונטי')) return '➖';
+  if(v.startsWith('כן')) return '✅';
+  if(v.includes('עצירת עבודה')) return '⛔';
+  if(v.startsWith('לא')) return '❌';
+  return '▪️';
+}
 function buildTextReport(){
-  let lines=['*סיור נאמני בטיחות חודשי*','('+new Date().toLocaleString('he-IL')+')',''];
+  const SEP='━━━━━━━━━━━━━';
+  const lines=['🦺 *דוח סיור נאמני בטיחות חודשי*','📅 '+new Date().toLocaleString('he-IL'),''];
   CONFIG.forEach(tab=>{
-    lines.push('*'+tab.name+'*');
+    // כותרת לשונית — בולטת (מודגשת + קו מפריד + אייקון)
+    lines.push(SEP);
+    lines.push('🔷 *'+tab.name+'*');
+    lines.push(SEP);
     tab.questions.forEach(q=>{
       const v=answerText(q);
-      const ph=(state.photos[q.id]&&state.photos[q.id].length)?` [📷 ${state.photos[q.id].length}]`:'';
-      lines.push(`• ${q.label}: ${v||'—'}${ph}`);
+      const ph=(state.photos[q.id]&&state.photos[q.id].length)?`  📷×${state.photos[q.id].length}`:'';
+      // שורה 1: סימון + השאלה · שורה 2: התשובה מודגשת — ניגודיות ברורה
+      lines.push(`${answerEmoji(v)} ${q.label}`);
+      lines.push(`      ↳ *${v||'—'}*${ph}`);
     });
     lines.push('');
   });
@@ -710,14 +758,11 @@ document.getElementById('copyBtn').onclick=()=>{
 document.getElementById('waBtn').onclick=smartSend;
 
 /* =========================================================================
-   שליחה חכמה — לחיצה אחת. אם יש תמונות: הדוח מרונדר כתמונה ונשלח יחד עם כל
-   התמונות בפעולת שיתוף אחת (WhatsApp מתעלם מטקסט כשיש קבצים — לכן הדוח עצמו
-   הופך לתמונה כדי שיגיע תמיד שלם). אם אין תמונות: וואטסאפ טקסט רגיל.
-   בלי העתק/הדבק, בלי פעולות נוספות ממכין הדוח.
+   שליחה חכמה — לחיצה אחת. שולחים את התמונות כקבצים + הדוח כטקסט מצורף (WhatsApp
+   מציג אותו ככיתוב שמלווה את התמונות). כך הדוח נשאר טקסט והתמונות תמונות.
+   חשוב ל-iOS: navigator.share חייב להיקרא סינכרונית בתוך לחיצת המשתמש — בלי
+   שום await לפניו. אחרי השליחה מציעים לרוקן את הטופס לדוח הבא.
    ========================================================================= */
-/* חשוב ל-iOS: navigator.share חייב להיקרא באופן סינכרוני בתוך לחיצת המשתמש —
-   בלי שום await לפניו. שולחים את התמונות כקבצים + הדוח כטקסט מצורף (WhatsApp
-   מציג אותו ככיתוב/הודעה שמלווה את התמונות). כך הדוח נשאר טקסט והתמונות תמונות. */
 function smartSend(){
   const text=buildTextReport();
   const photos=collectPhotoFiles();   // סינכרוני (atob)
@@ -727,11 +772,12 @@ function smartSend(){
     if(navigator.canShare(shareData)){
       // נקרא מיד — שומר על אישור-הלחיצה של iOS
       navigator.share(shareData)
-        .then(()=>toast('נשלח: הדוח + '+photos.length+' תמונות'))
+        .then(()=>{ toast('נשלח: הדוח + '+photos.length+' תמונות'); offerReset(); })
         .catch(err=>{
           if(err && err.name==='AbortError') return;   // המשתמש ביטל
           openWaText(text);                             // נפילה חזרה לטקסט
           toast('לא ניתן לצרף תמונות במכשיר זה — נשלח טקסט');
+          offerReset();
         });
       try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי לטקסט
       return;
@@ -740,6 +786,7 @@ function smartSend(){
     try{ navigator.clipboard.writeText(text); }catch(e){}
     openWaText(text);
     toast('מכשיר זה שולח טקסט בלבד — לשליחת התמונות פתח בטלפון');
+    offerReset();
     return;
   }
 
@@ -747,6 +794,7 @@ function smartSend(){
   try{ navigator.clipboard.writeText(text); }catch(e){}
   openWaText(text);
   toast('וואטסאפ נפתח עם הדוח המלא');
+  offerReset();
 }
 
 /* פתיחת וואטסאפ עם הדוח כטקסט (בורר הקבוצות) */
