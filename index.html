@@ -262,8 +262,7 @@
     <h2>סיכום הסיור</h2>
     <div id="sumBody"></div>
     <div class="modal-actions">
-      <button class="wa" id="waBtn">🟢 פתח וואטסאפ ובחר קבוצה</button>
-      <button id="shareBtn" style="grid-column:1/-1">📎 שתף כולל תמונות</button>
+      <button class="wa" id="waBtn" style="grid-column:1/-1">🟢 שלח בוואטסאפ</button>
       <button id="copyBtn">📋 העתק טקסט</button>
       <button id="jsonBtn">⬇️ הורד JSON</button>
       <button class="close" id="closeSum">סגור</button>
@@ -678,8 +677,8 @@ function openSummary(){
     banner.textContent=`⚠️ חסרים ${missing.length} שדות חובה. ניתן לשלוח אך מומלץ להשלים.`;
     body.prepend(banner);
   }
-  const hasPhotos=Object.values(state.photos||{}).some(a=>a&&a.length);
-  document.getElementById('shareBtn').style.display=hasPhotos?'block':'none';
+  const nPhotos=Object.values(state.photos||{}).reduce((s,a)=>s+((a&&a.length)||0),0);
+  document.getElementById('waBtn').textContent = nPhotos ? `🟢 שלח בוואטסאפ (כולל ${nPhotos} תמונות)` : '🟢 שלח בוואטסאפ';
   sumBackdrop.classList.add('open');
 }
 document.getElementById('closeSum').onclick=()=>sumBackdrop.classList.remove('open');
@@ -708,15 +707,45 @@ function buildTextReport(){
 document.getElementById('copyBtn').onclick=()=>{
   navigator.clipboard.writeText(buildTextReport()).then(()=>toast('הטקסט הועתק'));
 };
-document.getElementById('waBtn').onclick=sendWhatsApp;
-document.getElementById('shareBtn').onclick=shareWithPhotos;
+document.getElementById('waBtn').onclick=smartSend;
 
-/* פתיחה ישירה של וואטסאפ עם בורר הקבוצות (הדרך האמינה, בלי מגש שיתוף) */
-async function sendWhatsApp(){
+/* =========================================================================
+   שליחה חכמה — לחיצה אחת. אם יש תמונות: הדוח מרונדר כתמונה ונשלח יחד עם כל
+   התמונות בפעולת שיתוף אחת (WhatsApp מתעלם מטקסט כשיש קבצים — לכן הדוח עצמו
+   הופך לתמונה כדי שיגיע תמיד שלם). אם אין תמונות: וואטסאפ טקסט רגיל.
+   בלי העתק/הדבק, בלי פעולות נוספות ממכין הדוח.
+   ========================================================================= */
+async function smartSend(){
   const text=buildTextReport();
-  try{ await navigator.clipboard.writeText(text); }catch(e){}
-  // תמיד שולחים את הדוח המלא לתוך הודעת הווטסאפ. רק אם הדוח ענק באמת
-  // (מעבר לגבול שכתובת URL יכולה לשאת) נופלים חזרה להדבקה ידנית.
+  try{ await navigator.clipboard.writeText(text); }catch(e){}   // גיבוי בלבד
+  const photos=collectPhotoFiles();
+
+  if(photos.length){
+    // יש תמונות — דוח (כתמונה) + כל התמונות בשליחה אחת
+    if(navigator.canShare){
+      try{
+        const reportImg=await buildReportImageFile(text);
+        const files=[reportImg, ...photos];
+        if(navigator.canShare({files})){
+          await navigator.share({files, title:'סיור נאמני בטיחות'});
+          toast('נשלח: הדוח + '+photos.length+' תמונות');
+          return;
+        }
+      }catch(e){ if(e && e.name==='AbortError') return; }   // המשתמש ביטל
+    }
+    // מכשיר לא תומך בצירוף קבצים (בד"כ מחשב) — טקסט בלבד + הודעה
+    openWaText(text);
+    toast('מכשיר זה שולח טקסט בלבד — לשליחת התמונות פתח בטלפון');
+    return;
+  }
+
+  // אין תמונות — וואטסאפ רגיל עם הדוח כטקסט
+  openWaText(text);
+  toast('וואטסאפ נפתח עם הדוח המלא');
+}
+
+/* פתיחת וואטסאפ עם הדוח כטקסט (בורר הקבוצות) */
+function openWaText(text){
   let msg=text;
   if(encodeURIComponent(text).length>60000){
     msg='*סיכום סיור נאמני בטיחות*\n('+new Date().toLocaleString('he-IL')+')\n\n⚠️ הדוח ארוך מדי לשליחה אוטומטית — הועתק, הדבק כאן (החזק ובחר "הדבק").';
@@ -724,25 +753,60 @@ async function sendWhatsApp(){
   const url='https://wa.me/?text='+encodeURIComponent(msg);
   const w=window.open(url,'_blank');
   if(!w){ window.location.href=url; }               // אם חלון קופץ נחסם
-  toast('וואטסאפ נפתח עם הדוח המלא');
 }
 
-/* שיתוף כולל תמונות דרך מגש השיתוף (כשנתמך) */
-async function shareWithPhotos(){
-  const text=buildTextReport();
+/* איסוף כל תמונות הסיור לקבצים */
+function collectPhotoFiles(){
   const files=[];
   try{
     for(const [qid,arr] of Object.entries(state.photos||{})){
       (arr||[]).forEach((d,i)=>{ const f=dataURLtoFile(d, qid+'-'+(i+1)+'.jpg'); if(f) files.push(f); });
     }
   }catch(e){}
-  try{
-    if(navigator.canShare && files.length && navigator.canShare({files})){
-      await navigator.share({text, files, title:'סיור נאמני בטיחות'}); return;
+  return files;
+}
+
+/* רינדור הדוח לתמונת PNG — RTL, גלישת שורות, גובה אוטומטי */
+function buildReportImageFile(text){
+  return new Promise(resolve=>{
+    const scale=Math.min(window.devicePixelRatio||1,2);
+    const W=1080, margin=48, maxW=W-margin*2;
+    const fLine='28px Arial, sans-serif', fHead='bold 34px Arial, sans-serif', fTitle='bold 46px Arial, sans-serif';
+    const lhLine=44, lhHead=52, lhTitle=62;
+    const meas=document.createElement('canvas').getContext('2d'); meas.direction='rtl';
+    function wrap(str,f){
+      meas.font=f; const words=str.split(' '); const out=[]; let cur='';
+      words.forEach(w=>{ const t=cur?cur+' '+w:w; if(meas.measureText(t).width>maxW && cur){out.push(cur);cur=w;} else cur=t; });
+      if(cur) out.push(cur); return out.length?out:[''];
     }
-    if(navigator.share){ await navigator.share({text, title:'סיור נאמני בטיחות'}); return; }
-    toast('המכשיר לא תומך בשיתוף — השתמש בכפתור וואטסאפ');
-  }catch(e){ if(e && e.name!=='AbortError') toast('השיתוף בוטל'); }
+    const items=[];
+    text.split('\n').forEach((ln,idx)=>{
+      const t=ln.trim();
+      if(t===''){ items.push({type:'blank'}); return; }
+      const isHead=t.startsWith('*')&&t.endsWith('*'); const clean=t.replace(/\*/g,'');
+      if(idx===0&&isHead) items.push({type:'title',lines:wrap(clean,fTitle)});
+      else if(isHead) items.push({type:'head',lines:wrap(clean,fHead)});
+      else items.push({type:'line',lines:wrap(clean,fLine)});
+    });
+    let H=margin*2;
+    items.forEach(it=>{
+      if(it.type==='blank'){ H+=lhLine*0.5; return; }
+      const lh=it.type==='title'?lhTitle:it.type==='head'?lhHead:lhLine;
+      H+=it.lines.length*lh+(it.type==='head'?12:0);
+    });
+    const cv=document.createElement('canvas'); cv.width=W*scale; cv.height=Math.ceil(H*scale);
+    const ctx=cv.getContext('2d'); ctx.scale(scale,scale);
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
+    ctx.direction='rtl'; ctx.textAlign='right'; ctx.textBaseline='top';
+    const xR=W-margin; let y=margin;
+    items.forEach(it=>{
+      if(it.type==='blank'){ y+=lhLine*0.5; return; }
+      if(it.type==='title'){ ctx.font=fTitle; ctx.fillStyle='#15803d'; it.lines.forEach(l=>{ctx.fillText(l,xR,y);y+=lhTitle;}); return; }
+      if(it.type==='head'){ y+=8; ctx.font=fHead; ctx.fillStyle='#15803d'; it.lines.forEach(l=>{ctx.fillText(l,xR,y);y+=lhHead;}); y+=4; return; }
+      ctx.font=fLine; ctx.fillStyle='#1a1a1a'; it.lines.forEach(l=>{ctx.fillText(l,xR,y);y+=lhLine;});
+    });
+    cv.toBlob(b=>resolve(new File([b],'safety-report.png',{type:'image/png'})),'image/png',0.92);
+  });
 }
 function dataURLtoFile(dataurl, filename){
   try{
