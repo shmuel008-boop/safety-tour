@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<title>סיור נאמני בטיחות חודשי</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#eef0f2;
+    --card:#ffffff;
+    --ink:#191c20;
+    --muted:#8b9199;
+    --line:#d6dade;
+    --line-soft:#e6e9ec;
+    --brand:#1f7ac0;
+    --brand-soft:#e9f1f9;
+    --danger:#e01e2b;
+    --danger-soft:#fdecec;
+    --ok:#1f9d57;
+    --sel:#e8f1fb;
+    --sel-border:#1f7ac0;
+    --tile-active:#e2e5e9;
+    --shadow:0 1px 3px rgba(20,30,50,.06),0 1px 2px rgba(20,30,50,.04);
+    --radius:16px;
+    --nav-h:118px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Assistant',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    font-size:18px;
+    line-height:1.4;
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior-y:none;
+  }
+  button{font-family:inherit;cursor:pointer}
+
+  /* ---------- Header ---------- */
+  header{
+    position:sticky;top:0;z-index:40;
+    background:#fff;
+    padding:calc(env(safe-area-inset-top) + 10px) 16px 12px;
+    display:flex;align-items:center;gap:10px;
+    border-bottom:1px solid var(--line-soft);
+  }
+  .h-title{
+    flex:1;text-align:center;font-weight:800;font-size:22px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#141821;
+  }
+  .h-btn{
+    width:44px;height:44px;border:none;background:transparent;border-radius:12px;
+    display:grid;place-items:center;color:var(--brand);font-size:20px;
+  }
+  .h-btn.menu{background:#eaf3fb}
+  .chev-back{transform:scaleX(-1);color:var(--brand);font-size:26px;font-weight:700}
+
+  /* ---------- Progress strip ---------- */
+  .tabname-strip{
+    background:#fff;border-bottom:1px solid var(--line-soft);
+    padding:8px 16px 12px;display:flex;align-items:center;gap:10px;
+  }
+  .tabname-strip .dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+  .tabname-strip .dot.on{background:var(--brand)}
+  .tabname-strip .cur{font-weight:700;font-size:15px;color:#333;margin-inline-start:auto}
+
+  /* ---------- Main ---------- */
+  main{
+    padding:14px 14px calc(var(--nav-h) + 20px);
+    max-width:640px;margin:0 auto;
+  }
+  .card{
+    background:var(--card);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:20px 18px;margin-bottom:14px;
+    border:1px solid transparent;
+  }
+  .card.active-q{border-color:#bcd8f0}
+  .q-label{font-size:20px;font-weight:600;margin:0 0 16px;line-height:1.35}
+  .req{color:var(--danger);font-weight:700;margin-inline-start:2px}
+  .q-note{font-size:14px;color:var(--muted);font-weight:400}
+
+  /* ---------- Option pills ---------- */
+  .opts{display:flex;flex-direction:column;gap:12px}
+  .opt{
+    width:100%;text-align:right;background:#fff;
+    border:1.5px solid var(--line);border-radius:12px;
+    padding:16px 18px;font-size:19px;color:var(--ink);
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    transition:.12s;
+  }
+  .opt:active{transform:scale(.99)}
+  .opt .check{width:22px;height:22px;flex:none;opacity:0}
+  .opt.sel{border-color:var(--sel-border);background:var(--sel);font-weight:700}
+  .opt.sel .check{opacity:1}
+  .opt.stop.sel{border-color:#e08a00;background:#fff6e6}
+  .opt.na.sel{border-color:#8b9199;background:#f1f3f5}
+
+  /* ---------- Search select ---------- */
+  .search-box{position:relative}
+  .search-input{
+    width:100%;border:1.5px solid var(--line);border-radius:12px;
+    padding:15px 46px 15px 16px;font-size:18px;font-family:inherit;background:#fff;color:var(--ink);
+  }
+  .search-input::placeholder{color:var(--muted)}
+  .search-ico{position:absolute;inset-inline-start:16px;top:50%;transform:translateY(-50%);color:var(--brand);font-size:20px;pointer-events:none}
+  .show-all{display:block;width:100%;text-align:center;color:var(--brand);font-weight:700;font-size:18px;background:none;border:none;padding:16px 0 4px}
+  .opt-list{margin-top:10px;border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;display:none}
+  .opt-list.open{display:block}
+  .opt-list button{
+    display:flex;width:100%;justify-content:space-between;align-items:center;
+    text-align:right;padding:14px 16px;border:none;background:#fff;font-size:18px;color:var(--ink);
+    border-bottom:1px solid var(--line-soft);
+  }
+  .opt-list button:last-child{border-bottom:none}
+  .opt-list button.sel{background:var(--sel);font-weight:700;color:var(--brand)}
+  .chosen-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .chip{background:var(--brand-soft);color:var(--brand);border:1px solid #cfe3f4;border-radius:999px;padding:6px 12px 6px 8px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .chip button{border:none;background:none;color:var(--brand);font-size:16px;line-height:1;padding:0}
+
+  /* ---------- Text ---------- */
+  textarea.free{
+    width:100%;min-height:96px;border:1.5px solid var(--line);border-radius:12px;
+    padding:14px 16px;font-size:18px;font-family:inherit;resize:vertical;color:var(--ink);
+  }
+  textarea.free::placeholder{color:var(--muted)}
+  .detail-wrap{margin-top:12px}
+  .detail-wrap label{display:block;font-size:15px;color:#555;margin-bottom:6px;font-weight:600}
+
+  /* ---------- Photo ---------- */
+  .photo-zone{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px}
+  .photo-head{font-size:15px;font-weight:700;color:#444;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .photo-head .p-req{color:var(--danger)}
+  .photo-btns{display:flex;gap:10px}
+  .pbtn{
+    flex:1;border:1.5px solid var(--line);background:#fff;border-radius:12px;
+    padding:13px;font-size:16px;font-weight:600;color:var(--brand);
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .pbtn:active{background:#f4f8fc}
+  .thumbs{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+  .thumb{position:relative;width:84px;height:84px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb button{
+    position:absolute;top:3px;inset-inline-start:3px;width:22px;height:22px;border-radius:50%;
+    background:rgba(0,0,0,.6);color:#fff;border:none;font-size:13px;line-height:1;display:grid;place-items:center;
+  }
+  .hidden-file{display:none}
+
+  /* ---------- Bottom navigator ---------- */
+  .navbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;
+    background:#fff;border-top:1px solid var(--line-soft);
+    padding:6px 10px calc(env(safe-area-inset-bottom) + 8px);
+    box-shadow:0 -2px 12px rgba(20,30,50,.06);
+  }
+  .nav-handle{display:flex;justify-content:center;padding:2px 0 6px}
+  .nav-handle button{border:none;background:none;color:#888;font-size:20px;padding:2px 30px}
+  .nav-tiles{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:8px;align-items:stretch}
+  .tile{
+    border:1px solid var(--line-soft);border-radius:14px;background:#fff;
+    padding:10px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;
+    min-height:82px;justify-content:center;text-align:center;
+  }
+  .tile.center{background:var(--tile-active);border-color:#d0d4d9}
+  .tile .ic{width:26px;height:30px;display:grid;place-items:center}
+  .tile .ic svg{width:24px;height:28px}
+  .tile .tt{font-size:13px;font-weight:700;line-height:1.15;color:#2a2e33}
+  .tile.center .tt{color:#111}
+  .tile .cnt{font-size:12px;color:#8b9199;font-weight:600;direction:ltr}
+  .tile.warn .tt, .tile.warn .cnt{color:var(--danger)}
+  .tile.warn .ic svg [fill]{fill:var(--danger)}
+  .tile.done .cnt{color:var(--ok)}
+  .tile.send{background:var(--brand);border-color:var(--brand);color:#fff}
+  .tile.send .tt{color:#fff;font-size:18px}
+  .tile.send .ic svg path{stroke:#fff}
+  .tile.start .tt{color:#333}
+
+  /* ---------- Tab sheet ---------- */
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(15,20,30,.4);z-index:60;display:none}
+  .sheet-backdrop.open{display:block}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:61;background:#fff;
+    border-radius:20px 20px 0 0;padding:10px 14px calc(env(safe-area-inset-bottom) + 18px);
+    transform:translateY(100%);transition:.28s cubic-bezier(.2,.8,.2,1);max-height:80vh;overflow:auto;
+  }
+  .sheet.open{transform:translateY(0)}
+  .sheet .grip{width:44px;height:5px;border-radius:3px;background:#d5d9de;margin:6px auto 14px}
+  .sheet h3{margin:0 0 12px;font-size:18px}
+  .sheet-item{
+    display:flex;align-items:center;gap:12px;width:100%;text-align:right;
+    border:1px solid var(--line-soft);border-radius:12px;background:#fff;padding:14px;margin-bottom:8px;font-size:17px;
+  }
+  .sheet-item.cur{background:var(--brand-soft);border-color:#bcd8f0}
+  .sheet-item .num{width:26px;height:26px;border-radius:50%;background:#eef1f4;display:grid;place-items:center;font-size:14px;font-weight:700;color:#555;flex:none}
+  .sheet-item.cur .num{background:var(--brand);color:#fff}
+  .sheet-item .st{margin-inline-start:auto;font-size:13px;direction:ltr;color:#8b9199;font-weight:600}
+  .sheet-item.warn .st{color:var(--danger)}
+  .sheet-item.done .st{color:var(--ok)}
+
+  /* ---------- Summary modal ---------- */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(15,20,30,.5);z-index:70;display:none;align-items:flex-end;justify-content:center}
+  .modal-backdrop.open{display:flex}
+  .modal{background:#fff;width:100%;max-width:640px;border-radius:20px 20px 0 0;max-height:88vh;overflow:auto;padding:8px 16px calc(env(safe-area-inset-bottom) + 16px)}
+  .modal .grip{width:44px;height:5px;border-radius:3px;background:#d5d9de;margin:8px auto 12px}
+  .modal h2{margin:4px 0 14px;font-size:22px}
+  .sum-sec{margin-bottom:16px}
+  .sum-sec h4{margin:0 0 6px;font-size:15px;color:var(--brand);font-weight:700}
+  .sum-row{font-size:16px;padding:6px 0;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;gap:14px}
+  .sum-row .qq{color:#555;flex:1}
+  .sum-row .aa{font-weight:700;text-align:left;white-space:nowrap}
+  .sum-row .aa.empty{color:var(--danger);font-weight:600}
+  .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .modal-actions button{padding:15px;border-radius:12px;border:1.5px solid var(--line);background:#fff;font-size:16px;font-weight:700;color:var(--ink)}
+  .modal-actions .wa{grid-column:1/-1;background:#25d366;border-color:#25d366;color:#fff}
+  .modal-actions .close{grid-column:1/-1;color:#666}
+  .miss-banner{background:var(--danger-soft);color:#a01019;border:1px solid #f3c4c4;border-radius:12px;padding:12px 14px;font-size:15px;font-weight:600;margin-bottom:14px}
+
+  .toast{position:fixed;bottom:calc(var(--nav-h) + 20px);left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:12px 20px;border-radius:12px;font-size:15px;z-index:90;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header>
+  <button class="h-btn menu" id="menuBtn" aria-label="תפריט">⋮</button>
+  <button class="h-btn" id="backBtn" aria-label="חזור"><span class="chev-back">‹</span></button>
+  <div class="h-title" id="hTitle">סיור נאמני בטיחות חודשי</div>
+</header>
+
+<div class="tabname-strip">
+  <span class="cur" id="curTabName">—</span>
+  <span id="dots" style="display:flex;gap:6px"></span>
+</div>
+
+<main id="main"></main>
+
+<!-- bottom navigator -->
+<nav class="navbar">
+  <div class="nav-handle"><button id="openSheet" aria-label="כל הלשוניות">︿</button></div>
+  <div class="nav-tiles" id="navTiles"></div>
+</nav>
+
+<!-- tab sheet -->
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<div class="sheet" id="sheet">
+  <div class="grip"></div>
+  <h3>מעבר בין לשוניות</h3>
+  <div id="sheetList"></div>
+</div>
+
+<!-- summary modal -->
+<div class="modal-backdrop" id="sumBackdrop">
+  <div class="modal">
+    <div class="grip"></div>
+    <h2>סיכום הסיור</h2>
+    <div id="sumBody"></div>
+    <div class="modal-actions">
+      <button class="wa" id="waBtn">🟢 פתח וואטסאפ ובחר קבוצה</button>
+      <button id="shareBtn" style="grid-column:1/-1">📎 שתף כולל תמונות</button>
+      <button id="copyBtn">📋 העתק טקסט</button>
+      <button id="jsonBtn">⬇️ הורד JSON</button>
+      <button class="close" id="closeSum">סגור</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<input type="file" accept="image/*" capture="environment" class="hidden-file" id="camInput">
+<input type="file" accept="image/*" multiple class="hidden-file" id="galInput">
+
+<script>
+/* =========================================================================
+   קונפיגורציה — כאן עורכים שאלות, אופציות ולשוניות בקלות.
+   type: 'choice' | 'search' | 'text'
+   required: true/false  (משפיע על מונה הלשונית X/Y)
+   photo: true           (מוסיף אפשרות צילום/העלאת תמונה לשאלה)
+   detailOn: 'לא, פרט'   (מציג שדה טקסט חופשי כשנבחרת אופציה זו)
+   multi: true           (עבור search — בחירה מרובה)
+   ========================================================================= */
+const YN   = ['כן','לא'];
+const YNNA = ['כן','לא','לא רלוונטי'];
+const YN_STOP_NA = ['כן','לא','עצירת עבודה','לא רלוונטי'];
+
+const CONFIG = [
+  {
+    id:'general', name:'משתתפים ופרטים כלליים',
+    questions:[
+      {id:'location', label:'מיקום הסיור', required:true, type:'search',
+        options:['טורבינת גז 9E יחידה 1','טורבינת גז 9E יחידה 2','טורבינת קיטור ABB','חדר פיקוד ראשי','חדר משאבות','ACC / מעבה','מתקן טיפול במים','שנאי ראשי','אזור דלקים']},
+      {id:'participants', label:'משתתפים בסיור', type:'search', multi:true,
+        options:['נאמן בטיחות','ממונה בטיחות','מנהל משמרת','חשמלאי אחזקה','מכונאי אחזקה','קבלן חוץ','מהנדס תורן']},
+      {id:'department', label:'שם המחלקה', type:'search',
+        options:['אחזקת חשמל','אחזקת מכונות','אחזקת מכשור ובקרה','תפעול','כימיה','בטיחות']},
+      {id:'performer', label:'מי מבצע את העבודה?', type:'choice',
+        options:['עובד אחזקה','קבלן חוץ','עובד תפעול','גורם חיצוני מורשה']},
+    ]
+  },
+  {
+    id:'ppe', name:'ציוד מגן אישי',
+    questions:[
+      {id:'ppe_suitable', label:'האם בידי העובדים ציוד מגן אישי מתאים למשימה', type:'choice', options:YNNA},
+      {id:'ppe_used', label:'האם נעשה שימוש בציוד מגן אישי כנדרש?', type:'choice', options:['כן','לא, פרט','לא רלוונטי'], detailOn:'לא, פרט'},
+    ]
+  },
+  {
+    id:'prep', name:'הכנה למשימה',
+    questions:[
+      {id:'jsa_exists', label:'האם יש לצוות טופס JSA?', required:true, type:'choice', options:YN},
+      {id:'jsa_signed', label:'האם טופס JSA ממולא וחתום כנדרש?', note:'(נדרש לצלם טופס JSA)', required:true, type:'choice', options:YN, photo:true},
+      {id:'work_permit', label:'האם יש לצוות היתר עבודה?', required:true, type:'choice', options:YN},
+      {id:'rmd_signed', label:'האם רמ"ד או סגנו חתומים על אישור טופס JSA?', required:true, type:'choice', options:YN},
+      {id:'emergency_numbers', label:'האם הצוות מכיר את מספרי החירום של חדרי פיקוד?', required:true, type:'choice', options:YN},
+      {id:'special_cert', label:'ככל שנדרשת הסמכה מיוחדת לעובד האם יש ברשותו (גובה, ריתוך, חשמלאי)?', required:true, type:'choice', options:['כן','לא, פרט'], detailOn:'לא, פרט'},
+      {id:'height_safe', label:'האם מבוצעת עבודה בגובה בצורה בטוחה?', required:true, type:'choice', options:YN_STOP_NA},
+      {id:'hot_work_safe', label:'האם מתבצעת עבודה חמה בצורה בטוחה עפ"י היתר עבודה חמה?', required:true, type:'choice', options:YN_STOP_NA},
+    ]
+  },
+  {
+    id:'environment', name:'סביבת העבודה',
+    questions:[
+      {id:'env_tidy', label:'האם סביבת העבודה מסודרת ונקייה', required:true, type:'choice', options:YN},
+      {id:'passages_clear', label:'האם המעברים חופשיים ללא מכשולים?', required:true, type:'choice', options:YN},
+    ]
+  },
+  {
+    id:'tools', name:'כלי עבודה',
+    questions:[
+      {id:'tools_inspected', label:'האם כלי עבודה עברו בדיקה?', note:'(תסקיר, חשמלאי וכו׳)', type:'choice', options:YNNA},
+      {id:'tools_ok', label:'האם כלי עבודה תקינים (בדיקה ויזואלית)?', type:'choice', options:YNNA},
+      {id:'tools_suitable', label:'האם כלי עבודה מתאימים לביצוע משימה (אין אילתורים)?', type:'choice', options:YNNA},
+      {id:'tools_certified', label:'האם עובדים מוסמכים לשימוש בכלי עבודה?, או מודרכים?', type:'choice', options:YNNA},
+    ]
+  },
+  {
+    id:'notes', name:'דגשים נוספים מסיור בטיחות',
+    questions:[
+      {id:'hazards', label:'האם נמצאו מפגעים', type:'search', multi:true,
+        options:['מפגע חשמלי','מפגע כיבוי אש','חוסר גידור / מעקה','דליפת שמן / דלק','רעש חריג','מפגע ריתוך','אחסון לקוי','מפגע ארגונומי']},
+      {id:'notes_free', label:'רשום במילים', type:'text', placeholder:'הכנס טקסט...'},
+      {id:'near_miss', label:'דיווח כמעט ונפגע', type:'choice', options:['לא','כן']},
+      {id:'work_stop', label:'דיווח על עצירת עבודה', type:'choice', options:['לא','כן','ציין עובד חברה או קבלן','דווח לממונה בטיחות'], detailOn:'ציין עובד חברה או קבלן'},
+    ]
+  },
+];
+
+/* icons */
+const ICON = `<svg viewBox="0 0 24 28" fill="none"><path d="M3 3.5A2.5 2.5 0 0 1 5.5 1H15l6 6v18.5A2.5 2.5 0 0 1 18.5 28h-13A2.5 2.5 0 0 1 3 25.5z" fill="#2a2e33"/><path d="M15 1v6h6" fill="#0d0f12"/></svg>`;
+const ICON_SEND = `<svg viewBox="0 0 24 24" fill="none"><path d="M20 5 4 12l6 2 2 6 8-15Z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+const STORE_KEY = 'safetyTour_v1';
+let current = 0;
+let state = loadState();
+
+function loadState(){
+  try{ const s = JSON.parse(localStorage.getItem(STORE_KEY)); return s && s.answers ? s : {answers:{}, photos:{}}; }
+  catch(e){ return {answers:{}, photos:{}}; }
+}
+function saveState(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+function getA(qid){ return state.answers[qid]; }
+function setA(qid,val){ state.answers[qid]=val; saveState(); }
+
+/* required progress per tab */
+function tabProgress(tab){
+  const reqs = tab.questions.filter(q=>q.required);
+  const total = reqs.length ? 1 : 0;          // /1 אם יש שדות חובה, אחרת /0
+  if(!reqs.length) return {done:0,total:0,complete:true};
+  const allAnswered = reqs.every(q=>isAnswered(q));
+  return {done: allAnswered?1:0, total:1, complete:allAnswered};
+}
+function isAnswered(q){
+  const a=getA(q.id);
+  if(q.type==='search') return Array.isArray(a) ? a.length>0 : !!a;
+  if(q.type==='text')   return a && a.trim().length>0;
+  return a!==undefined && a!==null && a!=='';
+}
+
+/* =========================================================================
+   RENDER TAB
+   ========================================================================= */
+const main = document.getElementById('main');
+
+function render(){
+  const tab = CONFIG[current];
+  document.getElementById('curTabName').textContent = tab.name;
+  renderDots();
+  main.innerHTML='';
+  tab.questions.forEach((q,i)=>{
+    main.appendChild(renderQuestion(q, i===0));
+  });
+  renderNav();
+  window.scrollTo({top:0,behavior:'instant'});
+}
+
+function renderDots(){
+  const d=document.getElementById('dots'); d.innerHTML='';
+  CONFIG.forEach((_,i)=>{
+    const s=document.createElement('span');
+    s.className='dot'+(i<=current?' on':'');
+    d.appendChild(s);
+  });
+}
+
+function renderQuestion(q, isFirst){
+  const card=document.createElement('div');
+  card.className='card'+(isFirst?' active-q':'');
+
+  const label=document.createElement('div');
+  label.className='q-label';
+  label.innerHTML = escapeHtml(q.label)
+    + (q.required?'<span class="req">*</span>':'')
+    + (q.note?` <span class="q-note">${escapeHtml(q.note)}</span>`:'');
+  card.appendChild(label);
+
+  if(q.type==='choice') card.appendChild(renderChoice(q));
+  else if(q.type==='search') card.appendChild(renderSearch(q));
+  else if(q.type==='text') card.appendChild(renderText(q));
+
+  // detail free-text field
+  if(q.detailOn){
+    const dw=document.createElement('div');
+    dw.className='detail-wrap';
+    dw.style.display = getA(q.id)===q.detailOn ? 'block':'none';
+    dw.dataset.detailFor=q.id;
+    dw.innerHTML=`<label>פירוט</label>`;
+    const ta=document.createElement('textarea');
+    ta.className='free'; ta.placeholder='כתוב פירוט...';
+    ta.value = state.answers[q.id+'__detail']||'';
+    ta.oninput=()=>{ state.answers[q.id+'__detail']=ta.value; saveState(); };
+    dw.appendChild(ta);
+    card.appendChild(dw);
+  }
+
+  // photo zone
+  if(q.photo) card.appendChild(renderPhoto(q));
+
+  return card;
+}
+
+function renderChoice(q){
+  const wrap=document.createElement('div'); wrap.className='opts';
+  q.options.forEach(opt=>{
+    const b=document.createElement('button');
+    let cls='opt';
+    if(opt==='עצירת עבודה') cls+=' stop';
+    if(opt==='לא רלוונטי') cls+=' na';
+    if(getA(q.id)===opt) cls+=' sel';
+    b.className=cls;
+    b.innerHTML=`<span>${escapeHtml(opt)}</span><span class="check">${checkSvg()}</span>`;
+    b.onclick=()=>{
+      setA(q.id, opt);
+      // toggle detail field
+      const dw=main.querySelector(`[data-detail-for="${q.id}"]`);
+      if(dw) dw.style.display = (opt===q.detailOn)?'block':'none';
+      render(); flashSave();
+    };
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+
+function renderSearch(q){
+  const box=document.createElement('div'); box.className='search-box';
+  const sb=document.createElement('div'); sb.style.position='relative';
+  const input=document.createElement('input');
+  input.className='search-input'; input.placeholder='חיפוש'; input.type='text';
+  const ico=document.createElement('span'); ico.className='search-ico'; ico.innerHTML='🔍';
+  sb.appendChild(input); sb.appendChild(ico); box.appendChild(sb);
+
+  const list=document.createElement('div'); list.className='opt-list';
+  const showAll=document.createElement('button'); showAll.className='show-all'; showAll.textContent='הצג הכול';
+  const chosenWrap=document.createElement('div'); chosenWrap.className='chosen-chips';
+
+  const selected = ()=> Array.isArray(getA(q.id)) ? getA(q.id) : (getA(q.id)?[getA(q.id)]:[]);
+
+  function paintList(filter=''){
+    list.innerHTML='';
+    q.options.filter(o=>o.includes(filter)).forEach(o=>{
+      const bt=document.createElement('button');
+      const on=selected().includes(o);
+      bt.className=on?'sel':'';
+      bt.innerHTML=`<span>${escapeHtml(o)}</span><span>${on?checkSvg():''}</span>`;
+      bt.onclick=()=>{
+        let sel=selected();
+        if(q.multi){ sel = on ? sel.filter(x=>x!==o) : [...sel,o]; setA(q.id,sel); }
+        else { setA(q.id, on?'':o); list.classList.remove('open'); }
+        paintList(input.value); paintChips(); updateNavCounts(); flashSave();
+      };
+      list.appendChild(bt);
+    });
+  }
+  function paintChips(){
+    chosenWrap.innerHTML='';
+    selected().forEach(o=>{
+      const c=document.createElement('span'); c.className='chip';
+      c.innerHTML=`<span>${escapeHtml(o)}</span><button aria-label="הסר">✕</button>`;
+      c.querySelector('button').onclick=()=>{
+        let sel=selected().filter(x=>x!==o);
+        setA(q.id, q.multi?sel:(sel[0]||'')); paintList(input.value); paintChips(); updateNavCounts();
+      };
+      chosenWrap.appendChild(c);
+    });
+  }
+  input.oninput=()=>{ list.classList.add('open'); paintList(input.value); };
+  input.onfocus=()=>{ list.classList.add('open'); paintList(input.value); };
+  showAll.onclick=()=>{ list.classList.toggle('open'); paintList(input.value); };
+
+  paintList(); paintChips();
+  box.appendChild(list); box.appendChild(showAll); box.appendChild(chosenWrap);
+  return box;
+}
+
+function renderText(q){
+  const ta=document.createElement('textarea');
+  ta.className='free'; ta.placeholder=q.placeholder||'הכנס טקסט...';
+  ta.value=getA(q.id)||'';
+  ta.oninput=()=>{ setA(q.id, ta.value); updateNavCounts(); };
+  ta.onblur=flashSave;
+  return ta;
+}
+
+function renderPhoto(q){
+  const z=document.createElement('div'); z.className='photo-zone';
+  z.innerHTML=`<div class="photo-head">📎 תמונות מצורפות ${q.required?'<span class="p-req">*</span>':''}</div>`;
+  const btns=document.createElement('div'); btns.className='photo-btns';
+  const cam=document.createElement('button'); cam.className='pbtn'; cam.innerHTML='📷 צלם';
+  const gal=document.createElement('button'); gal.className='pbtn'; gal.innerHTML='🖼️ גלריה';
+  cam.onclick=()=>triggerFile('cam',q.id);
+  gal.onclick=()=>triggerFile('gal',q.id);
+  btns.appendChild(cam); btns.appendChild(gal); z.appendChild(btns);
+
+  const thumbs=document.createElement('div'); thumbs.className='thumbs'; thumbs.id='thumbs-'+q.id;
+  z.appendChild(thumbs);
+  setTimeout(()=>paintThumbs(q.id),0);
+  return z;
+}
+
+/* ---- photo handling ---- */
+let activePhotoQ=null;
+function triggerFile(kind,qid){
+  activePhotoQ=qid;
+  document.getElementById(kind==='cam'?'camInput':'galInput').click();
+}
+function handleFiles(files){
+  if(!activePhotoQ||!files.length) return;
+  const qid=activePhotoQ;
+  state.photos[qid]=state.photos[qid]||[];
+  let pending=files.length;
+  [...files].forEach(f=>{
+    const r=new FileReader();
+    r.onload=e=>{ state.photos[qid].push(e.target.result); if(--pending===0){ saveState(); paintThumbs(qid); updateNavCounts(); flashSave(); } };
+    r.readAsDataURL(f);
+  });
+}
+document.getElementById('camInput').addEventListener('change',e=>{handleFiles(e.target.files);e.target.value='';});
+document.getElementById('galInput').addEventListener('change',e=>{handleFiles(e.target.files);e.target.value='';});
+function paintThumbs(qid){
+  const box=document.getElementById('thumbs-'+qid); if(!box) return;
+  box.innerHTML='';
+  (state.photos[qid]||[]).forEach((src,idx)=>{
+    const t=document.createElement('div'); t.className='thumb';
+    t.innerHTML=`<img src="${src}"><button aria-label="מחק">✕</button>`;
+    t.querySelector('button').onclick=()=>{ state.photos[qid].splice(idx,1); saveState(); paintThumbs(qid); };
+    box.appendChild(t);
+  });
+}
+
+/* =========================================================================
+   BOTTOM NAV
+   ========================================================================= */
+function renderNav(){
+  const tiles=document.getElementById('navTiles'); tiles.innerHTML='';
+  const prev=current-1, next=current+1;
+
+  // RIGHT tile (previous / start)
+  if(current===0){
+    tiles.appendChild(makeTile({kind:'start', name:'התחל כאן', arrow:'→'}));
+  } else {
+    tiles.appendChild(makeTileFor(prev));
+  }
+  // CENTER (current)
+  tiles.appendChild(makeTileFor(current,true));
+  // LEFT tile (next / send)
+  if(current===CONFIG.length-1){
+    tiles.appendChild(makeTile({kind:'send', name:'שלח', onclick:openSummary}));
+  } else {
+    tiles.appendChild(makeTileFor(next));
+  }
+  // reorder for RTL grid: we want [next][center][prev] visually? grid is RTL so first child = right.
+}
+
+function makeTileFor(idx, isCenter=false){
+  const tab=CONFIG[idx];
+  const p=tabProgress(tab);
+  const t=document.createElement('button');
+  let cls='tile';
+  if(isCenter) cls+=' center';
+  if(p.total>0 && !p.complete) cls+=' warn';
+  if(p.total>0 && p.complete) cls+=' done';
+  t.className=cls;
+  t.innerHTML=`<span class="ic">${ICON}</span><span class="tt">${escapeHtml(tab.name)}</span><span class="cnt">(${p.done}/${p.total})</span>`;
+  t.onclick=()=>{ current=idx; render(); };
+  return t;
+}
+function makeTile({kind,name,arrow,onclick}){
+  const t=document.createElement('button');
+  t.className='tile '+kind;
+  if(kind==='send'){
+    t.innerHTML=`<span class="ic">${ICON_SEND}</span><span class="tt">${name}</span>`;
+    t.onclick=onclick;
+  } else {
+    t.innerHTML=`<span class="ic">${ICON}</span><span class="tt">${name}</span><span class="cnt">${arrow||''}</span>`;
+    t.onclick=()=>{ current=0; render(); };
+  }
+  return t;
+}
+function updateNavCounts(){ renderNav(); renderSheet(); }
+
+/* nav header buttons */
+document.getElementById('backBtn').onclick=()=>{ if(current>0){current--;render();} };
+document.getElementById('menuBtn').onclick=openSheetFn;
+
+/* =========================================================================
+   TAB SHEET
+   ========================================================================= */
+const sheet=document.getElementById('sheet'), sheetBackdrop=document.getElementById('sheetBackdrop');
+function openSheetFn(){ renderSheet(); sheetBackdrop.classList.add('open'); requestAnimationFrame(()=>sheet.classList.add('open')); }
+function closeSheet(){ sheet.classList.remove('open'); sheetBackdrop.classList.remove('open'); }
+document.getElementById('openSheet').onclick=openSheetFn;
+sheetBackdrop.onclick=closeSheet;
+function renderSheet(){
+  const list=document.getElementById('sheetList'); list.innerHTML='';
+  CONFIG.forEach((tab,i)=>{
+    const p=tabProgress(tab);
+    const b=document.createElement('button');
+    let cls='sheet-item'+(i===current?' cur':'');
+    if(p.total>0 && !p.complete) cls+=' warn';
+    if(p.total>0 && p.complete) cls+=' done';
+    b.className=cls;
+    b.innerHTML=`<span class="num">${i+1}</span><span>${escapeHtml(tab.name)}</span><span class="st">(${p.done}/${p.total})</span>`;
+    b.onclick=()=>{ current=i; render(); closeSheet(); };
+    list.appendChild(b);
+  });
+}
+
+/* =========================================================================
+   SUMMARY / SEND
+   ========================================================================= */
+const sumBackdrop=document.getElementById('sumBackdrop');
+function openSummary(){
+  const body=document.getElementById('sumBody'); body.innerHTML='';
+  const missing=[];
+  CONFIG.forEach(tab=>{
+    const sec=document.createElement('div'); sec.className='sum-sec';
+    sec.innerHTML=`<h4>${escapeHtml(tab.name)}</h4>`;
+    tab.questions.forEach(q=>{
+      const val=answerText(q);
+      if(q.required && !isAnswered(q)) missing.push(q.label);
+      const row=document.createElement('div'); row.className='sum-row';
+      const photoTag=(state.photos[q.id]&&state.photos[q.id].length)?` 📷×${state.photos[q.id].length}`:'';
+      row.innerHTML=`<span class="qq">${escapeHtml(q.label)}${q.required?' *':''}</span><span class="aa ${val?'':'empty'}">${val?escapeHtml(val)+photoTag:'— חסר'}</span>`;
+      sec.appendChild(row);
+    });
+    body.appendChild(sec);
+  });
+  if(missing.length){
+    const banner=document.createElement('div'); banner.className='miss-banner';
+    banner.textContent=`⚠️ חסרים ${missing.length} שדות חובה. ניתן לשלוח אך מומלץ להשלים.`;
+    body.prepend(banner);
+  }
+  const hasPhotos=Object.values(state.photos||{}).some(a=>a&&a.length);
+  document.getElementById('shareBtn').style.display=hasPhotos?'block':'none';
+  sumBackdrop.classList.add('open');
+}
+document.getElementById('closeSum').onclick=()=>sumBackdrop.classList.remove('open');
+sumBackdrop.onclick=e=>{ if(e.target===sumBackdrop) sumBackdrop.classList.remove('open'); };
+
+function answerText(q){
+  const a=getA(q.id);
+  let base = Array.isArray(a)?a.join(', '):(a||'');
+  const det=state.answers[q.id+'__detail'];
+  if(det && (a===q.detailOn)) base += ` — ${det}`;
+  return base;
+}
+function buildTextReport(){
+  let lines=['*סיור נאמני בטיחות חודשי*','('+new Date().toLocaleString('he-IL')+')',''];
+  CONFIG.forEach(tab=>{
+    lines.push('*'+tab.name+'*');
+    tab.questions.forEach(q=>{
+      const v=answerText(q);
+      const ph=(state.photos[q.id]&&state.photos[q.id].length)?` [📷 ${state.photos[q.id].length}]`:'';
+      lines.push(`• ${q.label}: ${v||'—'}${ph}`);
+    });
+    lines.push('');
+  });
+  return lines.join('\n');
+}
+document.getElementById('copyBtn').onclick=()=>{
+  navigator.clipboard.writeText(buildTextReport()).then(()=>toast('הטקסט הועתק'));
+};
+document.getElementById('waBtn').onclick=sendWhatsApp;
+document.getElementById('shareBtn').onclick=shareWithPhotos;
+
+/* פתיחה ישירה של וואטסאפ עם בורר הקבוצות (הדרך האמינה, בלי מגש שיתוף) */
+async function sendWhatsApp(){
+  const text=buildTextReport();
+  try{ await navigator.clipboard.writeText(text); }catch(e){}
+  let msg=text;
+  if(encodeURIComponent(text).length>1800){
+    msg='*סיכום סיור נאמני בטיחות*\n('+new Date().toLocaleString('he-IL')+')\n\n⚠️ הסיכום המלא הועתק — הדבק כאן (החזק ובחר "הדבק").';
+  }
+  const url='https://wa.me/?text='+encodeURIComponent(msg);
+  const w=window.open(url,'_blank');
+  if(!w){ window.location.href=url; }               // אם חלון קופץ נחסם
+  toast('וואטסאפ נפתח — הטקסט הועתק לגיבוי');
+}
+
+/* שיתוף כולל תמונות דרך מגש השיתוף (כשנתמך) */
+async function shareWithPhotos(){
+  const text=buildTextReport();
+  const files=[];
+  try{
+    for(const [qid,arr] of Object.entries(state.photos||{})){
+      (arr||[]).forEach((d,i)=>{ const f=dataURLtoFile(d, qid+'-'+(i+1)+'.jpg'); if(f) files.push(f); });
+    }
+  }catch(e){}
+  try{
+    if(navigator.canShare && files.length && navigator.canShare({files})){
+      await navigator.share({text, files, title:'סיור נאמני בטיחות'}); return;
+    }
+    if(navigator.share){ await navigator.share({text, title:'סיור נאמני בטיחות'}); return; }
+    toast('המכשיר לא תומך בשיתוף — השתמש בכפתור וואטסאפ');
+  }catch(e){ if(e && e.name!=='AbortError') toast('השיתוף בוטל'); }
+}
+function dataURLtoFile(dataurl, filename){
+  try{
+    const arr=dataurl.split(','), mime=(arr[0].match(/:(.*?);/)||[])[1]||'image/jpeg';
+    const bstr=atob(arr[1]); let n=bstr.length; const u8=new Uint8Array(n);
+    while(n--) u8[n]=bstr.charCodeAt(n);
+    return new File([u8], filename, {type:mime});
+  }catch(e){ return null; }
+}
+document.getElementById('jsonBtn').onclick=()=>{
+  const data={form:'סיור נאמני בטיחות חודשי',date:new Date().toISOString(),answers:state.answers,photoCounts:Object.fromEntries(Object.entries(state.photos).map(([k,v])=>[k,v.length]))};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='safety-tour.json'; a.click();
+  toast('הקובץ הורד');
+};
+
+/* =========================================================================
+   HELPERS
+   ========================================================================= */
+function checkSvg(){ return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none"><circle cx="12" cy="12" r="11" fill="#1f7ac0"/><path d="M7 12.5l3.2 3.3L17 8.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let toastT;
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
+let saveFlashT;
+function flashSave(){ clearTimeout(saveFlashT); saveFlashT=setTimeout(()=>{},10); }
+
+/* start */
+render();
+</script>
+</body>
+</html>
