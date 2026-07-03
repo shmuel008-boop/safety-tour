@@ -731,11 +731,10 @@ function resetForm(){
 document.getElementById('newBtn').onclick=()=>{
   if(confirm('להתחיל דוח חדש? כל מה שמילאת בטופס הנוכחי יימחק.')) resetForm();
 };
-/* אחרי שליחה — הצעה לרוקן לדוח הבא (השהיה קלה כדי שוואטסאפ ייפתח קודם) */
+/* אחרי שליחה — ריקון אוטומטי לדוח הבא (השהיה קלה כדי שוואטסאפ ייפתח קודם).
+   התמונות כבר נמסרו ל-navigator.share, לכן הניקוי בטוח ולא פוגע בשליחה. */
 function offerReset(){
-  setTimeout(()=>{
-    if(confirm('אם סיימת לשלוח את הדוח — להתחיל דוח חדש וריק?\n(הנתונים הנוכחיים יימחקו)')) resetForm();
-  }, 900);
+  setTimeout(resetForm, 1200);
 }
 
 function answerText(q){
