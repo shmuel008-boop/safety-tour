@@ -731,11 +731,8 @@ function resetForm(){
 document.getElementById('newBtn').onclick=()=>{
   if(confirm('להתחיל דוח חדש? כל מה שמילאת בטופס הנוכחי יימחק.')) resetForm();
 };
-/* אחרי שליחה — ריקון אוטומטי לדוח הבא (השהיה קלה כדי שוואטסאפ ייפתח קודם).
-   התמונות כבר נמסרו ל-navigator.share, לכן הניקוי בטוח ולא פוגע בשליחה. */
-function offerReset(){
-  setTimeout(resetForm, 1200);
-}
+/* לא מרוקנים אוטומטית אחרי פתיחת וואטסאפ.
+   פתיחת וואטסאפ או חלון שיתוף אינה אישור שהמשתמש באמת שלח את הדוח/התמונה. */
 
 function answerText(q){
   const a=getA(q.id);
@@ -775,37 +772,44 @@ document.getElementById('copyBtn').onclick=()=>{
 document.getElementById('waBtn').onclick=smartSend;
 
 /* =========================================================================
-   שליחה — לחיצה אחת. הדוח (קומפקטי, ~1,000 תווים) + התמונות בהודעה אחת:
-   navigator.share({text, files}) → וואטסאפ שולח תמונה עם הדוח ככיתוב.
-   הדוח נשאר טקסט, התמונות תמונות. חשוב ל-iOS: נקרא סינכרונית בלי await לפניו.
+   שליחה:
+   לחיצה אחת:
+   - הדוח מחייב לפחות תמונה אחת, ולכן הנתיב הראשי תמיד מוסר טקסט + קבצים באותה פעולה.
+   - אם אין תמונה בפועל, עוצרים ומבקשים לצרף תמונה במקום לשלוח דוח חסר.
+   הדפדפן/ווטסאפ מחליטים איך להציג את הטקסט מול התמונות, אבל זו הדרך היחידה
+   למסור תמונות ודוח מילולי באותה פעולת שיתוף מהדפדפן.
    ========================================================================= */
 function smartSend(){
   const text=buildTextReport();
   const photos=collectPhotoFiles();   // סינכרוני (atob)
   try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי
 
-  if(photos.length && navigator.canShare){
-    const shareData={text, files:photos, title:'דוח סיור בטיחות'};
-    if(navigator.canShare(shareData)){
-      navigator.share(shareData)
-        .then(()=>{ toast('נשלח: הדוח + '+photos.length+' תמונות ✓'); offerReset(); })
-        .catch(err=>{
-          if(err && err.name==='AbortError') return;     // המשתמש ביטל
-          openWaText(text); toast('נשלח כטקסט'); offerReset();
-        });
-      return;
-    }
-    // מכשיר בלי צירוף קבצים (בד"כ מחשב) — טקסט בלבד
-    openWaText(text);
-    toast('מכשיר זה שולח טקסט בלבד — לתמונות פתח בטלפון');
-    offerReset();
+  if(!photos.length){
+    toast('חובה לצרף לפחות תמונה אחת לפני שליחת הדוח');
     return;
   }
 
-  // אין תמונות — הדוח כהודעת טקסט
-  openWaText(text);
-  toast('וואטסאפ נפתח עם הדוח');
-  offerReset();
+  if(!navigator.share){
+    openWaText(text);
+    toast('מכשיר זה לא מאפשר צירוף תמונות מהדפדפן. הדוח הועתק ונפתח כטקסט');
+    return;
+  }
+
+  const shareData={text, files:photos, title:'דוח סיור בטיחות'};
+  const canShareFiles=!navigator.canShare || navigator.canShare({files:photos});
+  if(!canShareFiles){
+    openWaText(text);
+    toast('מכשיר זה לא מאפשר צירוף תמונות מהדפדפן. הדוח הועתק ונפתח כטקסט');
+    return;
+  }
+
+  navigator.share(shareData)
+    .then(()=>toast('נפתח שיתוף לדוח + תמונות'))
+    .catch(err=>{
+      if(err && err.name==='AbortError') return;     // המשתמש ביטל
+      openWaText(text);
+      toast('שיתוף תמונות לא נתמך כאן. הדוח הועתק ונפתח כטקסט');
+    });
 }
 
 /* פתיחת וואטסאפ עם הדוח כטקסט (בורר הקבוצות) */
