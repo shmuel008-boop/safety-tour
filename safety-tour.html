@@ -263,6 +263,7 @@
     <div id="sumBody"></div>
     <div class="modal-actions">
       <button class="wa" id="waBtn" style="grid-column:1/-1">🟢 שלח בוואטסאפ</button>
+      <button class="wa" id="sendPhotosBtn" style="grid-column:1/-1;display:none">📷 שלב 2: שלח את התמונות לאותה קבוצה</button>
       <button id="copyBtn">📋 העתק טקסט</button>
       <button id="jsonBtn">⬇️ הורד JSON</button>
       <button id="newBtn" style="grid-column:1/-1">🆕 דוח חדש (רוקן טופס)</button>
@@ -713,7 +714,8 @@ function openSummary(){
     body.prepend(banner);
   }
   const nPhotos=Object.values(state.photos||{}).reduce((s,a)=>s+((a&&a.length)||0),0);
-  document.getElementById('waBtn').textContent = nPhotos ? `🟢 שלח בוואטסאפ (כולל ${nPhotos} תמונות)` : '🟢 שלח בוואטסאפ';
+  document.getElementById('waBtn').textContent = nPhotos ? `🟢 שלב 1: שלח את הדוח (${nPhotos} תמונות אח"כ)` : '🟢 שלח את הדוח';
+  document.getElementById('sendPhotosBtn').style.display='none';   // איפוס שלב 2
   sumBackdrop.classList.add('open');
 }
 document.getElementById('closeSum').onclick=()=>sumBackdrop.classList.remove('open');
@@ -724,6 +726,8 @@ function resetForm(){
   state={answers:{}, photos:{}};
   saveState();
   current=0;
+  pendingPhotos=null;
+  const pb=document.getElementById('sendPhotosBtn'); if(pb) pb.style.display='none';
   sumBackdrop.classList.remove('open');
   render();
   toast('טופס חדש — הכול ריק ✅');
@@ -784,47 +788,55 @@ document.getElementById('waBtn').onclick=smartSend;
    חשוב ל-iOS: navigator.share חייב להיקרא סינכרונית בתוך לחיצת המשתמש — בלי
    שום await לפניו. אחרי השליחה מציעים לרוקן את הטופס לדוח הבא.
    ========================================================================= */
+let pendingPhotos=null;   // תמונות ממתינות לשלב 2
+
 function smartSend(){
   const text=buildTextReport();
   const photos=collectPhotoFiles();   // סינכרוני (atob)
+  try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי
 
-  if(photos.length && navigator.canShare){
-    // יש תמונות: הדוח כטקסט-כיתוב נחתך אחרי 1024 תווים (מגבלת וואטסאפ), לכן
-    // שולחים אותו כתמונה מלאה (בלי חיתוך) + תמונות הסיור, עם כיתוב קצר.
-    let files=null;
-    try{
-      const reportImg=buildReportImageFile(text);   // סינכרוני → File
-      if(reportImg) files=[reportImg, ...photos];
-    }catch(e){ files=null; }
-    const cap='🦺 דוח סיור נאמני בטיחות\n📅 '+new Date().toLocaleString('he-IL');
-    const shareData = files ? {files, text:cap, title:'סיור נאמני בטיחות'} : null;
-    if(shareData && navigator.canShare(shareData)){
-      // נקרא מיד — שומר על אישור-הלחיצה של iOS
-      navigator.share(shareData)
-        .then(()=>{ toast('נשלח: הדוח + '+photos.length+' תמונות'); offerReset(); })
-        .catch(err=>{
-          if(err && err.name==='AbortError') return;   // המשתמש ביטל
-          openWaText(text);                             // נפילה חזרה לטקסט
-          toast('לא ניתן לצרף תמונות במכשיר זה — נשלח טקסט');
-          offerReset();
-        });
-      try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי לטקסט המלא
-      return;
-    }
-    // המכשיר לא תומך בצירוף קבצים (בד"כ מחשב) — טקסט בלבד + הודעה
-    try{ navigator.clipboard.writeText(text); }catch(e){}
-    openWaText(text);
-    toast('מכשיר זה שולח טקסט בלבד — לשליחת התמונות פתח בטלפון');
-    offerReset();
+  // שלב 1: הדוח כהודעת טקסט מלאה — בלי קבצים, כדי שוואטסאפ יטפל בו כהודעה
+  // (עד 65,536 תווים, לא נחתך) ולא ככיתוב-תמונה (מוגבל ל-1,024 → חיתוך).
+  if(navigator.canShare && navigator.canShare({text})){
+    navigator.share({text, title:'דוח סיור בטיחות'})
+      .then(()=>{
+        if(photos.length){ showPhotoStep(photos); }   // שלב 2
+        else { toast('הדוח נשלח ✓'); offerReset(); }
+      })
+      .catch(err=>{
+        if(err && err.name==='AbortError') return;     // המשתמש ביטל
+        openWaText(text);                              // נפילה חזרה
+        if(!photos.length) offerReset();
+        else showPhotoStep(photos);
+      });
     return;
   }
 
-  // אין תמונות — וואטסאפ רגיל עם הדוח כטקסט
-  try{ navigator.clipboard.writeText(text); }catch(e){}
+  // מכשיר בלי Web Share (בד"כ מחשב) — וואטסאפ טקסט רגיל
   openWaText(text);
-  toast('וואטסאפ נפתח עם הדוח המלא');
+  toast(photos.length ? 'הדוח נשלח כטקסט — לשליחת תמונות פתח בטלפון' : 'וואטסאפ נפתח עם הדוח המלא');
   offerReset();
 }
+
+/* שלב 2 — חושף כפתור לשליחת התמונות לאותה קבוצה (שליחה נפרדת, בלחיצה נוספת) */
+function showPhotoStep(photos){
+  pendingPhotos=photos;
+  const btn=document.getElementById('sendPhotosBtn');
+  btn.style.display='block';
+  btn.textContent='📷 שלב 2: שלח את '+photos.length+' התמונות לאותה קבוצה';
+  toast('✓ הדוח נשלח — עכשיו לחץ "שלב 2" לתמונות');
+}
+document.getElementById('sendPhotosBtn').onclick=()=>{
+  const photos=pendingPhotos;
+  if(!photos || !photos.length){ document.getElementById('sendPhotosBtn').style.display='none'; return; }
+  if(navigator.canShare && navigator.canShare({files:photos})){
+    navigator.share({files:photos, title:'תמונות מהסיור'})
+      .then(()=>{ toast('נשלחו '+photos.length+' תמונות ✓'); document.getElementById('sendPhotosBtn').style.display='none'; offerReset(); })
+      .catch(err=>{ if(err && err.name!=='AbortError') toast('שליחת התמונות בוטלה'); });
+  } else {
+    toast('המכשיר לא תומך בשליחת תמונות');
+  }
+};
 
 /* פתיחת וואטסאפ עם הדוח כטקסט (בורר הקבוצות) */
 function openWaText(text){
@@ -846,51 +858,6 @@ function collectPhotoFiles(){
     }
   }catch(e){}
   return files;
-}
-
-/* רינדור הדוח לתמונת PNG — סינכרוני (חשוב ל-iOS). RTL, גלישת שורות, גובה אוטומטי.
-   מחזיר File ישירות (toDataURL סינכרוני) כדי לא לשבור את אישור-הלחיצה. */
-function buildReportImageFile(text){
-  const scale=Math.min(window.devicePixelRatio||1,2);
-  const W=1080, margin=48, maxW=W-margin*2;
-  const fLine='28px Arial, sans-serif', fHead='bold 34px Arial, sans-serif', fTitle='bold 46px Arial, sans-serif';
-  const lhLine=42, lhHead=50, lhTitle=60;
-  const meas=document.createElement('canvas').getContext('2d'); meas.direction='rtl';
-  function wrap(str,f){
-    meas.font=f; const words=str.split(' '); const out=[]; let cur='';
-    words.forEach(w=>{ const t=cur?cur+' '+w:w; if(meas.measureText(t).width>maxW && cur){out.push(cur);cur=w;} else cur=t; });
-    if(cur) out.push(cur); return out.length?out:[''];
-  }
-  const items=[];
-  text.split('\n').forEach((ln,idx)=>{
-    const t=ln.trim();
-    if(t===''){ items.push({type:'blank'}); return; }
-    if(/^━+$/.test(t)){ items.push({type:'rule'}); return; }        // קו מפריד
-    const isHead=t.startsWith('🔷'); const clean=t.replace(/\*/g,'');
-    if(idx===0){ items.push({type:'title',lines:wrap(clean,fTitle)}); }
-    else if(isHead){ items.push({type:'head',lines:wrap(clean,fHead)}); }
-    else { items.push({type:'line',lines:wrap(clean,fLine)}); }
-  });
-  let H=margin*2;
-  items.forEach(it=>{
-    if(it.type==='blank'){ H+=lhLine*0.4; return; }
-    if(it.type==='rule'){ H+=14; return; }
-    const lh=it.type==='title'?lhTitle:it.type==='head'?lhHead:lhLine;
-    H+=it.lines.length*lh+(it.type==='head'?10:0);
-  });
-  const cv=document.createElement('canvas'); cv.width=W*scale; cv.height=Math.ceil(H*scale);
-  const ctx=cv.getContext('2d'); ctx.scale(scale,scale);
-  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
-  ctx.direction='rtl'; ctx.textAlign='right'; ctx.textBaseline='top';
-  const xR=W-margin; let y=margin;
-  items.forEach(it=>{
-    if(it.type==='blank'){ y+=lhLine*0.4; return; }
-    if(it.type==='rule'){ ctx.strokeStyle='#cfd6dd'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(margin,y+6); ctx.lineTo(W-margin,y+6); ctx.stroke(); y+=14; return; }
-    if(it.type==='title'){ ctx.font=fTitle; ctx.fillStyle='#15803d'; it.lines.forEach(l=>{ctx.fillText(l,xR,y);y+=lhTitle;}); return; }
-    if(it.type==='head'){ y+=6; ctx.font=fHead; ctx.fillStyle='#15803d'; it.lines.forEach(l=>{ctx.fillText(l,xR,y);y+=lhHead;}); y+=4; return; }
-    ctx.font=fLine; ctx.fillStyle='#1a1a1a'; it.lines.forEach(l=>{ctx.fillText(l,xR,y);y+=lhLine;});
-  });
-  return dataURLtoFile(cv.toDataURL('image/png'), 'safety-report.png');
 }
 
 function dataURLtoFile(dataurl, filename){
