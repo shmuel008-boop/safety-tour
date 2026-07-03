@@ -752,8 +752,8 @@ function answerEmoji(val){
   return '▪️';
 }
 function buildTextReport(){
-  // פורמט קומפקטי — שורה אחת לכל שאלה — כדי שהדוח כולו ייכנס בהודעה אחת עם התמונה
-  // (בלי חיתוך). כותרת לשונית בולטת (🔷 + מודגש) ואימוג'י סטטוס לכל שאלה.
+  // דוח מלא להעתקה/גיבוי. כשמשתפים עם תמונה משתמשים ב-buildCaptionReport
+  // כדי להישאר מתחת למגבלת כיתוב מדיה של וואטסאפ.
   const lines=['🦺 *דוח סיור נאמני בטיחות חודשי* — '+new Date().toLocaleString('he-IL')];
   CONFIG.forEach(tab=>{
     lines.push('');
@@ -765,6 +765,63 @@ function buildTextReport(){
     });
   });
   return lines.join('\n');
+}
+const CAPTION_SAFE_CHARS = 950;
+const SHORT_TAB_NAMES = {
+  general:'כללי',
+  ppe:'צמ"א',
+  prep:'הכנה',
+  env:'סביבה',
+  tools:'כלים',
+  notes:'דגשים'
+};
+const SHORT_LABELS = {
+  location:'מיקום',
+  participants:'משתתפים',
+  department:'מחלקה',
+  performer:'מבצע',
+  ppe_suitable:'צמ"א מתאים',
+  ppe_used:'שימוש בצמ"א',
+  jsa_exists:'JSA קיים',
+  jsa_signed:'JSA חתום',
+  work_permit:'היתר עבודה',
+  rmd_signed:'אישור רמ"ד/סגן',
+  emergency_numbers:'מספרי חירום',
+  special_cert:'הסמכה מיוחדת',
+  height_safe:'עבודה בגובה',
+  hot_work_safe:'עבודה חמה',
+  env_tidy:'סדר וניקיון',
+  passages_clear:'מעברים פנויים',
+  tools_inspected:'כלים נבדקו',
+  tools_ok:'כלים תקינים',
+  tools_suitable:'כלים מתאימים',
+  tools_certified:'הסמכת עובדים',
+  hazards:'מפגעים',
+  notes_free:'הערות',
+  near_miss:'כמעט ונפגע',
+  work_stop:'עצירת עבודה'
+};
+function oneLine(s, max=52){
+  const txt=String(s||'').replace(/\s+/g,' ').trim();
+  const chars=Array.from(txt);
+  return chars.length>max ? chars.slice(0,max-1).join('')+'…' : txt;
+}
+function clampChars(s, max){
+  const chars=Array.from(s);
+  return chars.length>max ? chars.slice(0,max-1).join('')+'…' : s;
+}
+function buildCaptionReport(){
+  const lines=['🦺 דוח סיור בטיחות — '+new Date().toLocaleString('he-IL')];
+  CONFIG.forEach(tab=>{
+    lines.push('');
+    lines.push('🔷 '+(SHORT_TAB_NAMES[tab.id]||tab.name));
+    tab.questions.forEach(q=>{
+      const v=answerText(q);
+      const ph=(state.photos[q.id]&&state.photos[q.id].length)?` 📷×${state.photos[q.id].length}`:'';
+      lines.push(`${answerEmoji(v)} ${SHORT_LABELS[q.id]||q.label}: ${oneLine(v||'-')}${ph}`);
+    });
+  });
+  return clampChars(lines.join('\n'), CAPTION_SAFE_CHARS);
 }
 document.getElementById('copyBtn').onclick=()=>{
   navigator.clipboard.writeText(buildTextReport()).then(()=>toast('הטקסט הועתק'));
@@ -780,9 +837,10 @@ document.getElementById('waBtn').onclick=smartSend;
    למסור תמונות ודוח מילולי באותה פעולת שיתוף מהדפדפן.
    ========================================================================= */
 function smartSend(){
-  const text=buildTextReport();
+  const fullText=buildTextReport();
+  const text=buildCaptionReport();
   const photos=collectPhotoFiles();   // סינכרוני (atob)
-  try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי
+  try{ navigator.clipboard.writeText(fullText); }catch(e){}   // גיבוי עם הדוח המלא
 
   if(!photos.length){
     toast('חובה לצרף לפחות תמונה אחת לפני שליחת הדוח');
@@ -790,7 +848,7 @@ function smartSend(){
   }
 
   if(!navigator.share){
-    openWaText(text);
+    openWaText(fullText);
     toast('מכשיר זה לא מאפשר צירוף תמונות מהדפדפן. הדוח הועתק ונפתח כטקסט');
     return;
   }
@@ -798,7 +856,7 @@ function smartSend(){
   const shareData={text, files:photos, title:'דוח סיור בטיחות'};
   const canShareFiles=!navigator.canShare || navigator.canShare({files:photos});
   if(!canShareFiles){
-    openWaText(text);
+    openWaText(fullText);
     toast('מכשיר זה לא מאפשר צירוף תמונות מהדפדפן. הדוח הועתק ונפתח כטקסט');
     return;
   }
@@ -807,7 +865,7 @@ function smartSend(){
     .then(()=>toast('נפתח שיתוף לדוח + תמונות'))
     .catch(err=>{
       if(err && err.name==='AbortError') return;     // המשתמש ביטל
-      openWaText(text);
+      openWaText(fullText);
       toast('שיתוף תמונות לא נתמך כאן. הדוח הועתק ונפתח כטקסט');
     });
 }
