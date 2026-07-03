@@ -715,14 +715,16 @@ document.getElementById('shareBtn').onclick=shareWithPhotos;
 async function sendWhatsApp(){
   const text=buildTextReport();
   try{ await navigator.clipboard.writeText(text); }catch(e){}
+  // תמיד שולחים את הדוח המלא לתוך הודעת הווטסאפ. רק אם הדוח ענק באמת
+  // (מעבר לגבול שכתובת URL יכולה לשאת) נופלים חזרה להדבקה ידנית.
   let msg=text;
-  if(encodeURIComponent(text).length>1800){
-    msg='*סיכום סיור נאמני בטיחות*\n('+new Date().toLocaleString('he-IL')+')\n\n⚠️ הסיכום המלא הועתק — הדבק כאן (החזק ובחר "הדבק").';
+  if(encodeURIComponent(text).length>60000){
+    msg='*סיכום סיור נאמני בטיחות*\n('+new Date().toLocaleString('he-IL')+')\n\n⚠️ הדוח ארוך מדי לשליחה אוטומטית — הועתק, הדבק כאן (החזק ובחר "הדבק").';
   }
   const url='https://wa.me/?text='+encodeURIComponent(msg);
   const w=window.open(url,'_blank');
   if(!w){ window.location.href=url; }               // אם חלון קופץ נחסם
-  toast('וואטסאפ נפתח — הטקסט הועתק לגיבוי');
+  toast('וואטסאפ נפתח עם הדוח המלא');
 }
 
 /* שיתוף כולל תמונות דרך מגש השיתוף (כשנתמך) */
