@@ -263,7 +263,6 @@
     <div id="sumBody"></div>
     <div class="modal-actions">
       <button class="wa" id="waBtn" style="grid-column:1/-1">🟢 שלח בוואטסאפ</button>
-      <button class="wa" id="sendPhotosBtn" style="grid-column:1/-1;display:none">📷 שלב 2: שלח את התמונות לאותה קבוצה</button>
       <button id="copyBtn">📋 העתק טקסט</button>
       <button id="jsonBtn">⬇️ הורד JSON</button>
       <button id="newBtn" style="grid-column:1/-1">🆕 דוח חדש (רוקן טופס)</button>
@@ -714,8 +713,7 @@ function openSummary(){
     body.prepend(banner);
   }
   const nPhotos=Object.values(state.photos||{}).reduce((s,a)=>s+((a&&a.length)||0),0);
-  document.getElementById('waBtn').textContent = nPhotos ? `🟢 שלב 1: שלח את הדוח (${nPhotos} תמונות אח"כ)` : '🟢 שלח את הדוח';
-  document.getElementById('sendPhotosBtn').style.display='none';   // איפוס שלב 2
+  document.getElementById('waBtn').textContent = nPhotos ? `🟢 שלח בוואטסאפ (כולל ${nPhotos} תמונות)` : '🟢 שלח בוואטסאפ';
   sumBackdrop.classList.add('open');
 }
 document.getElementById('closeSum').onclick=()=>sumBackdrop.classList.remove('open');
@@ -726,8 +724,6 @@ function resetForm(){
   state={answers:{}, photos:{}};
   saveState();
   current=0;
-  pendingPhotos=null;
-  const pb=document.getElementById('sendPhotosBtn'); if(pb) pb.style.display='none';
   sumBackdrop.classList.remove('open');
   render();
   toast('טופס חדש — הכול ריק ✅');
@@ -759,21 +755,17 @@ function answerEmoji(val){
   return '▪️';
 }
 function buildTextReport(){
-  const SEP='━━━━━━━━━━━━━';
-  const lines=['🦺 *דוח סיור נאמני בטיחות חודשי*','📅 '+new Date().toLocaleString('he-IL'),''];
+  // פורמט קומפקטי — שורה אחת לכל שאלה — כדי שהדוח כולו ייכנס בהודעה אחת עם התמונה
+  // (בלי חיתוך). כותרת לשונית בולטת (🔷 + מודגש) ואימוג'י סטטוס לכל שאלה.
+  const lines=['🦺 *דוח סיור נאמני בטיחות חודשי* — '+new Date().toLocaleString('he-IL')];
   CONFIG.forEach(tab=>{
-    // כותרת לשונית — בולטת (מודגשת + קו מפריד + אייקון)
-    lines.push(SEP);
+    lines.push('');
     lines.push('🔷 *'+tab.name+'*');
-    lines.push(SEP);
     tab.questions.forEach(q=>{
       const v=answerText(q);
-      const ph=(state.photos[q.id]&&state.photos[q.id].length)?`  📷×${state.photos[q.id].length}`:'';
-      // שורה 1: סימון + השאלה · שורה 2: התשובה מודגשת — ניגודיות ברורה
-      lines.push(`${answerEmoji(v)} ${q.label}`);
-      lines.push(`      ↳ *${v||'—'}*${ph}`);
+      const ph=(state.photos[q.id]&&state.photos[q.id].length)?` 📷×${state.photos[q.id].length}`:'';
+      lines.push(`${answerEmoji(v)} ${q.label}: *${v||'—'}*${ph}`);
     });
-    lines.push('');
   });
   return lines.join('\n');
 }
@@ -783,60 +775,38 @@ document.getElementById('copyBtn').onclick=()=>{
 document.getElementById('waBtn').onclick=smartSend;
 
 /* =========================================================================
-   שליחה חכמה — לחיצה אחת. שולחים את התמונות כקבצים + הדוח כטקסט מצורף (WhatsApp
-   מציג אותו ככיתוב שמלווה את התמונות). כך הדוח נשאר טקסט והתמונות תמונות.
-   חשוב ל-iOS: navigator.share חייב להיקרא סינכרונית בתוך לחיצת המשתמש — בלי
-   שום await לפניו. אחרי השליחה מציעים לרוקן את הטופס לדוח הבא.
+   שליחה — לחיצה אחת. הדוח (קומפקטי, ~1,000 תווים) + התמונות בהודעה אחת:
+   navigator.share({text, files}) → וואטסאפ שולח תמונה עם הדוח ככיתוב.
+   הדוח נשאר טקסט, התמונות תמונות. חשוב ל-iOS: נקרא סינכרונית בלי await לפניו.
    ========================================================================= */
-let pendingPhotos=null;   // תמונות ממתינות לשלב 2
-
 function smartSend(){
   const text=buildTextReport();
   const photos=collectPhotoFiles();   // סינכרוני (atob)
   try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי
 
-  // שלב 1: הדוח כהודעת טקסט מלאה — בלי קבצים, כדי שוואטסאפ יטפל בו כהודעה
-  // (עד 65,536 תווים, לא נחתך) ולא ככיתוב-תמונה (מוגבל ל-1,024 → חיתוך).
-  if(navigator.canShare && navigator.canShare({text})){
-    navigator.share({text, title:'דוח סיור בטיחות'})
-      .then(()=>{
-        if(photos.length){ showPhotoStep(photos); }   // שלב 2
-        else { toast('הדוח נשלח ✓'); offerReset(); }
-      })
-      .catch(err=>{
-        if(err && err.name==='AbortError') return;     // המשתמש ביטל
-        openWaText(text);                              // נפילה חזרה
-        if(!photos.length) offerReset();
-        else showPhotoStep(photos);
-      });
+  if(photos.length && navigator.canShare){
+    const shareData={text, files:photos, title:'דוח סיור בטיחות'};
+    if(navigator.canShare(shareData)){
+      navigator.share(shareData)
+        .then(()=>{ toast('נשלח: הדוח + '+photos.length+' תמונות ✓'); offerReset(); })
+        .catch(err=>{
+          if(err && err.name==='AbortError') return;     // המשתמש ביטל
+          openWaText(text); toast('נשלח כטקסט'); offerReset();
+        });
+      return;
+    }
+    // מכשיר בלי צירוף קבצים (בד"כ מחשב) — טקסט בלבד
+    openWaText(text);
+    toast('מכשיר זה שולח טקסט בלבד — לתמונות פתח בטלפון');
+    offerReset();
     return;
   }
 
-  // מכשיר בלי Web Share (בד"כ מחשב) — וואטסאפ טקסט רגיל
+  // אין תמונות — הדוח כהודעת טקסט
   openWaText(text);
-  toast(photos.length ? 'הדוח נשלח כטקסט — לשליחת תמונות פתח בטלפון' : 'וואטסאפ נפתח עם הדוח המלא');
+  toast('וואטסאפ נפתח עם הדוח');
   offerReset();
 }
-
-/* שלב 2 — חושף כפתור לשליחת התמונות לאותה קבוצה (שליחה נפרדת, בלחיצה נוספת) */
-function showPhotoStep(photos){
-  pendingPhotos=photos;
-  const btn=document.getElementById('sendPhotosBtn');
-  btn.style.display='block';
-  btn.textContent='📷 שלב 2: שלח את '+photos.length+' התמונות לאותה קבוצה';
-  toast('✓ הדוח נשלח — עכשיו לחץ "שלב 2" לתמונות');
-}
-document.getElementById('sendPhotosBtn').onclick=()=>{
-  const photos=pendingPhotos;
-  if(!photos || !photos.length){ document.getElementById('sendPhotosBtn').style.display='none'; return; }
-  if(navigator.canShare && navigator.canShare({files:photos})){
-    navigator.share({files:photos, title:'תמונות מהסיור'})
-      .then(()=>{ toast('נשלחו '+photos.length+' תמונות ✓'); document.getElementById('sendPhotosBtn').style.display='none'; offerReset(); })
-      .catch(err=>{ if(err && err.name!=='AbortError') toast('שליחת התמונות בוטלה'); });
-  } else {
-    toast('המכשיר לא תומך בשליחת תמונות');
-  }
-};
 
 /* פתיחת וואטסאפ עם הדוח כטקסט (בורר הקבוצות) */
 function openWaText(text){
