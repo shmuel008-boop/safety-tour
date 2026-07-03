@@ -715,28 +715,25 @@ document.getElementById('waBtn').onclick=smartSend;
    הופך לתמונה כדי שיגיע תמיד שלם). אם אין תמונות: וואטסאפ טקסט רגיל.
    בלי העתק/הדבק, בלי פעולות נוספות ממכין הדוח.
    ========================================================================= */
-/* חשוב ל-iOS: navigator.share חייב להיקרא באופן סינכרוני בתוך לחיצת המשתמש.
-   לכן כל בניית הקבצים כאן סינכרונית ואין שום await לפני navigator.share. */
+/* חשוב ל-iOS: navigator.share חייב להיקרא באופן סינכרוני בתוך לחיצת המשתמש —
+   בלי שום await לפניו. שולחים את התמונות כקבצים + הדוח כטקסט מצורף (WhatsApp
+   מציג אותו ככיתוב/הודעה שמלווה את התמונות). כך הדוח נשאר טקסט והתמונות תמונות. */
 function smartSend(){
   const text=buildTextReport();
   const photos=collectPhotoFiles();   // סינכרוני (atob)
 
   if(photos.length && navigator.canShare){
-    let files=null;
-    try{
-      const reportImg=buildReportImageFile(text);   // סינכרוני → File
-      if(reportImg) files=[reportImg, ...photos];
-    }catch(e){ files=null; }
-    if(files && navigator.canShare({files})){
+    const shareData={text, files:photos, title:'סיור נאמני בטיחות'};
+    if(navigator.canShare(shareData)){
       // נקרא מיד — שומר על אישור-הלחיצה של iOS
-      navigator.share({files, title:'סיור נאמני בטיחות'})
+      navigator.share(shareData)
         .then(()=>toast('נשלח: הדוח + '+photos.length+' תמונות'))
         .catch(err=>{
           if(err && err.name==='AbortError') return;   // המשתמש ביטל
           openWaText(text);                             // נפילה חזרה לטקסט
           toast('לא ניתן לצרף תמונות במכשיר זה — נשלח טקסט');
         });
-      try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי, אחרי השיתוף
+      try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי לטקסט
       return;
     }
     // המכשיר לא תומך בצירוף קבצים (בד"כ מחשב) — טקסט בלבד + הודעה
@@ -774,47 +771,6 @@ function collectPhotoFiles(){
   return files;
 }
 
-/* רינדור הדוח לתמונת PNG — סינכרוני (חשוב ל-iOS). RTL, גלישת שורות, גובה אוטומטי.
-   מחזיר File ישירות (toDataURL סינכרוני) כדי לא לשבור את אישור-הלחיצה. */
-function buildReportImageFile(text){
-  const scale=Math.min(window.devicePixelRatio||1,2);
-  const W=1080, margin=48, maxW=W-margin*2;
-  const fLine='28px Arial, sans-serif', fHead='bold 34px Arial, sans-serif', fTitle='bold 46px Arial, sans-serif';
-  const lhLine=44, lhHead=52, lhTitle=62;
-  const meas=document.createElement('canvas').getContext('2d'); meas.direction='rtl';
-  function wrap(str,f){
-    meas.font=f; const words=str.split(' '); const out=[]; let cur='';
-    words.forEach(w=>{ const t=cur?cur+' '+w:w; if(meas.measureText(t).width>maxW && cur){out.push(cur);cur=w;} else cur=t; });
-    if(cur) out.push(cur); return out.length?out:[''];
-  }
-  const items=[];
-  text.split('\n').forEach((ln,idx)=>{
-    const t=ln.trim();
-    if(t===''){ items.push({type:'blank'}); return; }
-    const isHead=t.startsWith('*')&&t.endsWith('*'); const clean=t.replace(/\*/g,'');
-    if(idx===0&&isHead) items.push({type:'title',lines:wrap(clean,fTitle)});
-    else if(isHead) items.push({type:'head',lines:wrap(clean,fHead)});
-    else items.push({type:'line',lines:wrap(clean,fLine)});
-  });
-  let H=margin*2;
-  items.forEach(it=>{
-    if(it.type==='blank'){ H+=lhLine*0.5; return; }
-    const lh=it.type==='title'?lhTitle:it.type==='head'?lhHead:lhLine;
-    H+=it.lines.length*lh+(it.type==='head'?12:0);
-  });
-  const cv=document.createElement('canvas'); cv.width=W*scale; cv.height=Math.ceil(H*scale);
-  const ctx=cv.getContext('2d'); ctx.scale(scale,scale);
-  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
-  ctx.direction='rtl'; ctx.textAlign='right'; ctx.textBaseline='top';
-  const xR=W-margin; let y=margin;
-  items.forEach(it=>{
-    if(it.type==='blank'){ y+=lhLine*0.5; return; }
-    if(it.type==='title'){ ctx.font=fTitle; ctx.fillStyle='#15803d'; it.lines.forEach(l=>{ctx.fillText(l,xR,y);y+=lhTitle;}); return; }
-    if(it.type==='head'){ y+=8; ctx.font=fHead; ctx.fillStyle='#15803d'; it.lines.forEach(l=>{ctx.fillText(l,xR,y);y+=lhHead;}); y+=4; return; }
-    ctx.font=fLine; ctx.fillStyle='#1a1a1a'; it.lines.forEach(l=>{ctx.fillText(l,xR,y);y+=lhLine;});
-  });
-  return dataURLtoFile(cv.toDataURL('image/png'), 'safety-report.png');
-}
 function dataURLtoFile(dataurl, filename){
   try{
     const arr=dataurl.split(','), mime=(arr[0].match(/:(.*?);/)||[])[1]||'image/jpeg';
