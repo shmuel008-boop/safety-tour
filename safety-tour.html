@@ -366,14 +366,13 @@ function loadState(){
   try{ const s = JSON.parse(localStorage.getItem(STORE_KEY)); return s && s.answers ? s : {answers:{}, photos:{}}; }
   catch(e){ return {answers:{}, photos:{}}; }
 }
+let quotaWarned=false;
 function saveState(){
-  try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); quotaWarned=false; }
   catch(e){
     // חריגת מכסה (בד"כ יותר מדי תמונות) — לפחות נשמור את התשובות בלי התמונות
-    try{
-      localStorage.setItem(STORE_KEY, JSON.stringify({answers:state.answers, photos:{}}));
-      toast('⚠️ יותר מדי תמונות לשמירה — התשובות נשמרו, צמצם תמונות');
-    }catch(e2){}
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify({answers:state.answers, photos:{}})); }catch(e2){}
+    if(!quotaWarned){ quotaWarned=true; toast('⚠️ האחסון מלא — צמצם תמונות או התחל דוח חדש'); }
   }
 }
 function getA(qid){ return state.answers[qid]; }
@@ -568,10 +567,33 @@ function handleFiles(files){
   const qid=activePhotoQ;
   state.photos[qid]=state.photos[qid]||[];
   let pending=files.length;
+  const done=()=>{ if(--pending===0){ saveState(); paintThumbs(qid); updateNavCounts(); flashSave(); } };
   [...files].forEach(f=>{
     const r=new FileReader();
-    r.onload=e=>{ state.photos[qid].push(e.target.result); if(--pending===0){ saveState(); paintThumbs(qid); updateNavCounts(); flashSave(); } };
+    r.onload=e=>{
+      // הקטנה+דחיסה — כדי לא לפוצץ את אחסון הדפדפן וגם לזרז שליחה
+      downscaleImage(e.target.result, 1600, 0.72)
+        .then(small=>{ state.photos[qid].push(small); done(); })
+        .catch(()=>{ state.photos[qid].push(e.target.result); done(); });
+    };
     r.readAsDataURL(f);
+  });
+}
+/* הקטנת תמונה ל-maxDim פיקסלים ודחיסת JPEG */
+function downscaleImage(dataUrl, maxDim, quality){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+        if(Math.max(w,h)>maxDim){ const s=maxDim/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+        const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL('image/jpeg', quality));
+      }catch(err){ reject(err); }
+    };
+    img.onerror=reject;
+    img.src=dataUrl;
   });
 }
 document.getElementById('camInput').addEventListener('change',e=>{handleFiles(e.target.files);e.target.value='';});
