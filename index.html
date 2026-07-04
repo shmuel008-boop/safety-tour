@@ -360,7 +360,7 @@ const ICON_SEND = `<svg viewBox="0 0 24 24" fill="none"><path d="M20 5 4 12l6 2 
 /* =========================================================================
    STATE
    ========================================================================= */
-const APP_VER = 'v13';   // מוצג במסך הסיכום — לוודא שהטלפון מריץ את הגרסה העדכנית
+const APP_VER = 'v14';   // מוצג במסך הסיכום — לוודא שהטלפון מריץ את הגרסה העדכנית
 const STORE_KEY = 'safetyTour_v1';
 let current = 0;
 let state = loadState();
@@ -772,16 +772,16 @@ document.getElementById('waBtn').onclick=smartSend;
    ========================================================================= */
 function smartSend(){
   const text=buildTextReport();
-  const photos=collectPhotoFiles();   // סינכרוני (atob)
-  try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי
+  const photos=collectPhotoFiles({asDocument:true});   // סינכרוני (atob)
+  try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי עם הדוח המלא
 
   if(photos.length && navigator.canShare){
-    // v13 — ניסוי: share אחד עם התמונות + הדוח המלא ככיתוב (בלי קפיצה שנייה).
-    // אם וואטסאפ מציג את הדוח שלם — אין מגבלת 1024 וזה הפתרון. אם חותך — המגבלה אמיתית.
+    // שולחים את התמונות כ-PDF כדי שווטסאפ יקבל מסמכים ולא תמונות גלריה.
+    // כך הדוח נשאר טקסט מצורף, והקבצים אמורים להיכנס למסלול "מסמך" של וואטסאפ.
     const shareData={files:photos, text:text, title:'סיור נאמני בטיחות'};
     if(navigator.canShare(shareData)){
       navigator.share(shareData)
-        .then(()=>{ toast('נשלח ✓'); offerReset(); })
+        .then(()=>{ toast('נשלח: דוח + מסמכי תמונה ✓'); offerReset(); })
         .catch(err=>{
           if(err && err.name==='AbortError') return;     // המשתמש ביטל
           openWaText(text);                               // נפילה חזרה — לפחות הטקסט
@@ -833,12 +833,16 @@ function openWaText(text){
   if(!w){ window.location.href=url; }               // אם חלון קופץ נחסם
 }
 
-/* איסוף כל תמונות הסיור לקבצים */
-function collectPhotoFiles(){
+/* איסוף כל תמונות הסיור לקבצים.
+   asDocument=true יוצר PDF לכל תמונה כדי שווטסאפ יקבל מסמך אמיתי ולא תמונת גלריה. */
+function collectPhotoFiles({asDocument=false}={}){
   const files=[];
   try{
     for(const [qid,arr] of Object.entries(state.photos||{})){
-      (arr||[]).forEach((d,i)=>{ const f=dataURLtoFile(d, qid+'-'+(i+1)+'.jpg'); if(f) files.push(f); });
+      (arr||[]).forEach((d,i)=>{
+        const f=asDocument ? dataURLtoPdfFile(d, qid+'-'+(i+1)+'.pdf') : dataURLtoFile(d, qid+'-'+(i+1)+'.jpg');
+        if(f) files.push(f);
+      });
     }
   }catch(e){}
   return files;
@@ -851,6 +855,52 @@ function dataURLtoFile(dataurl, filename){
     while(n--) u8[n]=bstr.charCodeAt(n);
     return new File([u8], filename, {type:mime});
   }catch(e){ return null; }
+}
+function dataURLtoPdfFile(dataurl, filename){
+  try{
+    const arr=dataurl.split(','), bstr=atob(arr[1]);
+    const imgBytes=new Uint8Array(bstr.length);
+    for(let i=0;i<bstr.length;i++) imgBytes[i]=bstr.charCodeAt(i);
+    const dim=jpegDimensions(imgBytes) || {w:1200,h:1600};
+    const pageW=595, pageH=842, margin=24;
+    const maxW=pageW-margin*2, maxH=pageH-margin*2;
+    const scale=Math.min(maxW/dim.w, maxH/dim.h);
+    const drawW=Math.round(dim.w*scale), drawH=Math.round(dim.h*scale);
+    const x=Math.round((pageW-drawW)/2), y=Math.round((pageH-drawH)/2);
+    const content=`q\n${drawW} 0 0 ${drawH} ${x} ${y} cm\n/Im0 Do\nQ\n`;
+
+    let offset=0; const parts=[], offsets=[0];
+    const add=s=>{ parts.push(s); offset+=s.length; };
+    const addBytes=b=>{ parts.push(b); offset+=b.length; };
+    const obj=(n, body)=>{ offsets[n]=offset; add(`${n} 0 obj\n`); body(); add('\nendobj\n'); };
+
+    add('%PDF-1.4\n');
+    obj(1,()=>add('<< /Type /Catalog /Pages 2 0 R >>'));
+    obj(2,()=>add('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'));
+    obj(3,()=>add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`));
+    obj(4,()=>{ add(`<< /Type /XObject /Subtype /Image /Width ${dim.w} /Height ${dim.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgBytes.length} >>\nstream\n`); addBytes(imgBytes); add('\nendstream'); });
+    obj(5,()=>add(`<< /Length ${content.length} >>\nstream\n${content}endstream`));
+    const xref=offset;
+    add('xref\n0 6\n0000000000 65535 f \n');
+    for(let i=1;i<=5;i++) add(String(offsets[i]).padStart(10,'0')+' 00000 n \n');
+    add(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+    return new File(parts, filename, {type:'application/pdf'});
+  }catch(e){ return null; }
+}
+function jpegDimensions(bytes){
+  if(bytes[0]!==0xFF || bytes[1]!==0xD8) return null;
+  let i=2;
+  while(i<bytes.length){
+    while(bytes[i]===0xFF) i++;
+    const marker=bytes[i++];
+    if(marker===0xDA || marker===0xD9) break;
+    const len=(bytes[i]<<8)+bytes[i+1];
+    if((marker>=0xC0&&marker<=0xC3)||(marker>=0xC5&&marker<=0xC7)||(marker>=0xC9&&marker<=0xCB)||(marker>=0xCD&&marker<=0xCF)){
+      return {h:(bytes[i+3]<<8)+bytes[i+4], w:(bytes[i+5]<<8)+bytes[i+6]};
+    }
+    i+=len;
+  }
+  return null;
 }
 document.getElementById('jsonBtn').onclick=()=>{
   const data={form:'סיור נאמני בטיחות חודשי',date:new Date().toISOString(),answers:state.answers,photoCounts:Object.fromEntries(Object.entries(state.photos).map(([k,v])=>[k,v.length]))};
