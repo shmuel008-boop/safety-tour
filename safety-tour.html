@@ -268,6 +268,7 @@
       <button id="newBtn" style="grid-column:1/-1">🆕 דוח חדש (רוקן טופס)</button>
       <button class="close" id="closeSum">סגור</button>
     </div>
+    <div id="verInfo" style="text-align:center;font-size:11px;color:#8a939c;padding:6px 0 2px"></div>
   </div>
 </div>
 
@@ -358,6 +359,7 @@ const ICON_SEND = `<svg viewBox="0 0 24 24" fill="none"><path d="M20 5 4 12l6 2 
 /* =========================================================================
    STATE
    ========================================================================= */
+const APP_VER = 'v10';   // מוצג במסך הסיכום — לוודא שהטלפון מריץ את הגרסה העדכנית
 const STORE_KEY = 'safetyTour_v1';
 let current = 0;
 let state = loadState();
@@ -691,6 +693,7 @@ function openSummary(){
   }
   const nPhotos=Object.values(state.photos||{}).reduce((s,a)=>s+((a&&a.length)||0),0);
   document.getElementById('waBtn').textContent = nPhotos ? `🟢 שלח בוואטסאפ (כולל ${nPhotos} תמונות)` : '🟢 שלח בוואטסאפ';
+  document.getElementById('verInfo').textContent = `${APP_VER} · דוח: ${buildTextReport().length} תווים · ${nPhotos} תמונות`;
   sumBackdrop.classList.add('open');
 }
 document.getElementById('closeSum').onclick=()=>sumBackdrop.classList.remove('open');
