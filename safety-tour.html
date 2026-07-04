@@ -263,6 +263,7 @@
     <div id="sumBody"></div>
     <div class="modal-actions">
       <button class="wa" id="waBtn" style="grid-column:1/-1">🟢 שלח בוואטסאפ</button>
+      <button class="wa" id="backupTextBtn" style="grid-column:1/-1;display:none">📄 פתח את הדוח המלא (אם לא נפתח לבד)</button>
       <button id="copyBtn">📋 העתק טקסט</button>
       <button id="jsonBtn">⬇️ הורד JSON</button>
       <button id="newBtn" style="grid-column:1/-1">🆕 דוח חדש (רוקן טופס)</button>
@@ -359,7 +360,7 @@ const ICON_SEND = `<svg viewBox="0 0 24 24" fill="none"><path d="M20 5 4 12l6 2 
 /* =========================================================================
    STATE
    ========================================================================= */
-const APP_VER = 'v11';   // מוצג במסך הסיכום — לוודא שהטלפון מריץ את הגרסה העדכנית
+const APP_VER = 'v12';   // מוצג במסך הסיכום — לוודא שהטלפון מריץ את הגרסה העדכנית
 const STORE_KEY = 'safetyTour_v1';
 let current = 0;
 let state = loadState();
@@ -694,6 +695,7 @@ function openSummary(){
   const nPhotos=Object.values(state.photos||{}).reduce((s,a)=>s+((a&&a.length)||0),0);
   document.getElementById('waBtn').textContent = nPhotos ? `🟢 שלח הכול (${nPhotos} תמונות + דוח מלא)` : '🟢 שלח בוואטסאפ';
   document.getElementById('verInfo').textContent = `${APP_VER} · דוח: ${buildTextReport().length} תווים · ${nPhotos} תמונות`;
+  document.getElementById('backupTextBtn').style.display='none';
   sumBackdrop.classList.add('open');
 }
 document.getElementById('closeSum').onclick=()=>sumBackdrop.classList.remove('open');
@@ -778,14 +780,10 @@ function smartSend(){
     const shareData={files:photos, text:cap, title:'תמונות סיור בטיחות'};
     if(navigator.canShare(shareData)){
       navigator.share(shareData)
-        .then(()=>{
-          // התמונות נשלחו; עכשיו הדוח המלא כטקסט — אוטומטית
-          toast('התמונות נשלחו ✓ פותח את הדוח המלא...');
-          setTimeout(()=>openWaTextAfterShare(text), 700);
-        })
+        .then(()=>{ toast('התמונות נשלחו ✓ פותח את הדוח...'); armTextSend(text); })
         .catch(err=>{
           if(err && err.name==='AbortError') return;     // המשתמש ביטל
-          openWaTextAfterShare(text);                     // נפילה חזרה — לפחות הטקסט
+          armTextSend(text);                              // נפילה חזרה — לפחות הטקסט
         });
       return;
     }
@@ -802,13 +800,24 @@ function smartSend(){
   offerReset();
 }
 
-/* אחרי share מוצלח: מרוקנים את הטופס (לפני שעוזבים את הדף!) ואז מנווטים
-   לוואטסאפ עם הדוח המלא. אם הניווט מחליף את הטאב — הטופס כבר נקי ושמור. */
-function openWaTextAfterShare(text){
-  try{ resetForm(); }catch(e){}
+/* שלב 2 אוטומטי: מחכים בדיוק לרגע שחוזרים ל-Safari (visibilitychange) ואז
+   מנווטים לוואטסאפ עם הדוח המלא כטקסט. תזמון לפי חזרה = הטקסט לא "מתבזבז"
+   בזמן שהמשתמש עדיין בוואטסאפ עם התמונות. גם כפתור ידני נחשף כגיבוי. */
+function armTextSend(text){
   const url='https://wa.me/?text='+encodeURIComponent(text);
-  const w=window.open(url,'_blank');
-  if(!w){ window.location.href=url; }               // בלי אישור-לחיצה window.open לרוב חסום — ניווט ישיר תמיד עובד
+  let done=false;
+  const go=()=>{
+    if(done) return; done=true;
+    document.removeEventListener('visibilitychange', onVis);
+    try{ resetForm(); }catch(e){}
+    window.location.href=url;              // ניווט ישיר — לא דורש אישור-לחיצה של iOS
+  };
+  const onVis=()=>{ if(document.visibilityState==='visible'){ setTimeout(go, 500); } };
+  // כפתור גיבוי ידני למקרה שהניווט האוטומטי נכשל
+  const bBtn=document.getElementById('backupTextBtn');
+  if(bBtn){ bBtn.style.display='block'; bBtn.onclick=()=>{ window.location.href=url; }; }
+  if(document.visibilityState==='visible'){ setTimeout(go, 1000); }   // כבר חזרנו
+  else { document.addEventListener('visibilitychange', onVis); }      // נחכה לחזרה
 }
 
 /* פתיחת וואטסאפ עם הדוח כטקסט (בורר הקבוצות) */
