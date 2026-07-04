@@ -732,17 +732,21 @@ function answerEmoji(val){
   return '▪️';
 }
 function buildTextReport(){
-  // פורמט קומפקטי — שורה אחת לכל שאלה — כדי שהדוח כולו ייכנס בהודעה אחת עם התמונה
-  // (בלי חיתוך). כותרת לשונית בולטת (🔷 + מודגש) ואימוג'י סטטוס לכל שאלה.
-  const lines=['🦺 *דוח סיור נאמני בטיחות חודשי* — '+new Date().toLocaleString('he-IL')];
+  // פורמט מלא וקריא — כיתוב וואטסאפ תומך כיום באלפי תווים, אז אין צורך לקצר.
+  // לשונית בולטת (קו מפריד + 🔷 + מודגש), אימוג'י סטטוס, ותשובה מודגשת בשורה נפרדת.
+  const SEP='━━━━━━━━━━━━━';
+  const lines=['🦺 *דוח סיור נאמני בטיחות חודשי*','📅 '+new Date().toLocaleString('he-IL'),''];
   CONFIG.forEach(tab=>{
-    lines.push('');
+    lines.push(SEP);
     lines.push('🔷 *'+tab.name+'*');
+    lines.push(SEP);
     tab.questions.forEach(q=>{
       const v=answerText(q);
-      const ph=(state.photos[q.id]&&state.photos[q.id].length)?` 📷×${state.photos[q.id].length}`:'';
-      lines.push(`${answerEmoji(v)} ${q.label}: *${v||'—'}*${ph}`);
+      const ph=(state.photos[q.id]&&state.photos[q.id].length)?`  📷×${state.photos[q.id].length}`:'';
+      lines.push(`${answerEmoji(v)} ${q.label}`);
+      lines.push(`      ↳ *${v||'—'}*${ph}`);
     });
+    lines.push('');
   });
   return lines.join('\n');
 }
@@ -752,8 +756,9 @@ document.getElementById('copyBtn').onclick=()=>{
 document.getElementById('waBtn').onclick=smartSend;
 
 /* =========================================================================
-   שליחה — לחיצה אחת. הדוח (קומפקטי, ~1,000 תווים) + התמונות בהודעה אחת:
-   navigator.share({text, files}) → וואטסאפ שולח תמונה עם הדוח ככיתוב.
+   שליחה — לחיצה אחת. הדוח המלא + התמונות בהודעה אחת:
+   navigator.share({text, files}) → וואטסאפ שולח תמונה עם הדוח ככיתוב (כיום
+   הכיתוב תומך באלפי תווים, אז הדוח המלא נכנס בלי חיתוך).
    הדוח נשאר טקסט, התמונות תמונות. חשוב ל-iOS: נקרא סינכרונית בלי await לפניו.
    ========================================================================= */
 function smartSend(){
