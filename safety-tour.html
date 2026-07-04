@@ -363,17 +363,14 @@ let current = 0;
 let state = loadState();
 
 function loadState(){
-  try{ const s = JSON.parse(localStorage.getItem(STORE_KEY)); return s && s.answers ? s : {answers:{}, photos:{}}; }
+  // התמונות נשמרות בזיכרון בלבד (לא ב-localStorage) כדי לא לפוצץ את האחסון —
+  // התשובות כן נשמרות, אז סגירה בטעות לא מוחקת את תוכן הטופס.
+  try{ const s = JSON.parse(localStorage.getItem(STORE_KEY)); return s && s.answers ? {answers:s.answers, photos:{}} : {answers:{}, photos:{}}; }
   catch(e){ return {answers:{}, photos:{}}; }
 }
-let quotaWarned=false;
 function saveState(){
-  try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); quotaWarned=false; }
-  catch(e){
-    // חריגת מכסה (בד"כ יותר מדי תמונות) — לפחות נשמור את התשובות בלי התמונות
-    try{ localStorage.setItem(STORE_KEY, JSON.stringify({answers:state.answers, photos:{}})); }catch(e2){}
-    if(!quotaWarned){ quotaWarned=true; toast('⚠️ האחסון מלא — צמצם תמונות או התחל דוח חדש'); }
-  }
+  // שומרים תשובות בלבד — התמונות גדולות ולא נכנסות ל-localStorage (חורג ממכסה)
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify({answers:state.answers})); }catch(e){}
 }
 function getA(qid){ return state.answers[qid]; }
 function setA(qid,val){ state.answers[qid]=val; saveState(); }
@@ -570,30 +567,10 @@ function handleFiles(files){
   const done=()=>{ if(--pending===0){ saveState(); paintThumbs(qid); updateNavCounts(); flashSave(); } };
   [...files].forEach(f=>{
     const r=new FileReader();
-    r.onload=e=>{
-      // הקטנה+דחיסה — כדי לא לפוצץ את אחסון הדפדפן וגם לזרז שליחה
-      downscaleImage(e.target.result, 1600, 0.72)
-        .then(small=>{ state.photos[qid].push(small); done(); })
-        .catch(()=>{ state.photos[qid].push(e.target.result); done(); });
-    };
+    // שומרים את התמונה במלוא הגודל — תמונה גדולה גורמת לוואטסאפ לשלוח את
+    // הדוח כהודעת טקסט נפרדת (שלמה) במקום ככיתוב שנחתך.
+    r.onload=e=>{ state.photos[qid].push(e.target.result); done(); };
     r.readAsDataURL(f);
-  });
-}
-/* הקטנת תמונה ל-maxDim פיקסלים ודחיסת JPEG */
-function downscaleImage(dataUrl, maxDim, quality){
-  return new Promise((resolve,reject)=>{
-    const img=new Image();
-    img.onload=()=>{
-      try{
-        let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
-        if(Math.max(w,h)>maxDim){ const s=maxDim/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
-        const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-        cv.getContext('2d').drawImage(img,0,0,w,h);
-        resolve(cv.toDataURL('image/jpeg', quality));
-      }catch(err){ reject(err); }
-    };
-    img.onerror=reject;
-    img.src=dataUrl;
   });
 }
 document.getElementById('camInput').addEventListener('change',e=>{handleFiles(e.target.files);e.target.value='';});
@@ -731,8 +708,11 @@ function resetForm(){
 document.getElementById('newBtn').onclick=()=>{
   if(confirm('להתחיל דוח חדש? כל מה שמילאת בטופס הנוכחי יימחק.')) resetForm();
 };
-/* לא מרוקנים אוטומטית אחרי פתיחת וואטסאפ.
-   פתיחת וואטסאפ או חלון שיתוף אינה אישור שהמשתמש באמת שלח את הדוח/התמונה. */
+/* אחרי שליחה — ריקון אוטומטי לדוח הבא (השהיה קלה כדי שוואטסאפ ייפתח קודם).
+   התמונות כבר נמסרו ל-navigator.share, לכן הניקוי בטוח ולא פוגע בשליחה. */
+function offerReset(){
+  setTimeout(resetForm, 1200);
+}
 
 function answerText(q){
   const a=getA(q.id);
@@ -752,19 +732,17 @@ function answerEmoji(val){
   return '▪️';
 }
 function buildTextReport(){
-  const SEP='━━━━━━━━━━━━━';
-  const lines=['🦺 *דוח סיור נאמני בטיחות חודשי*','📅 '+new Date().toLocaleString('he-IL'),''];
+  // פורמט קומפקטי — שורה אחת לכל שאלה — כדי שהדוח כולו ייכנס בהודעה אחת עם התמונה
+  // (בלי חיתוך). כותרת לשונית בולטת (🔷 + מודגש) ואימוג'י סטטוס לכל שאלה.
+  const lines=['🦺 *דוח סיור נאמני בטיחות חודשי* — '+new Date().toLocaleString('he-IL')];
   CONFIG.forEach(tab=>{
-    lines.push(SEP);
+    lines.push('');
     lines.push('🔷 *'+tab.name+'*');
-    lines.push(SEP);
     tab.questions.forEach(q=>{
       const v=answerText(q);
-      const ph=(state.photos[q.id]&&state.photos[q.id].length)?`  📷×${state.photos[q.id].length}`:'';
-      lines.push(`${answerEmoji(v)} ${q.label}`);
-      lines.push(`      ↳ *${v||'—'}*${ph}`);
+      const ph=(state.photos[q.id]&&state.photos[q.id].length)?` 📷×${state.photos[q.id].length}`:'';
+      lines.push(`${answerEmoji(v)} ${q.label}: *${v||'—'}*${ph}`);
     });
-    lines.push('');
   });
   return lines.join('\n');
 }
@@ -774,43 +752,37 @@ document.getElementById('copyBtn').onclick=()=>{
 document.getElementById('waBtn').onclick=smartSend;
 
 /* =========================================================================
-   שליחה:
-   לחיצה אחת:
-   - הדוח מחייב לפחות תמונה אחת, ולכן הנתיב הראשי תמיד מוסר טקסט + קבצים באותה פעולה.
-   - אם אין תמונה בפועל, עוצרים ומבקשים לצרף תמונה במקום לשלוח דוח חסר.
-   הדפדפן/ווטסאפ מחליטים איך להציג את הטקסט מול התמונות, אבל זו הדרך היחידה
-   למסור תמונות ודוח מילולי באותה פעולת שיתוף מהדפדפן.
+   שליחה — לחיצה אחת. הדוח (קומפקטי, ~1,000 תווים) + התמונות בהודעה אחת:
+   navigator.share({text, files}) → וואטסאפ שולח תמונה עם הדוח ככיתוב.
+   הדוח נשאר טקסט, התמונות תמונות. חשוב ל-iOS: נקרא סינכרונית בלי await לפניו.
    ========================================================================= */
 function smartSend(){
   const text=buildTextReport();
   const photos=collectPhotoFiles();   // סינכרוני (atob)
-  try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי עם הדוח המלא
+  try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי
 
-  if(!photos.length){
-    toast('חובה לצרף לפחות תמונה אחת לפני שליחת הדוח');
-    return;
-  }
-
-  if(!navigator.share){
+  if(photos.length && navigator.canShare){
+    const shareData={text, files:photos, title:'דוח סיור בטיחות'};
+    if(navigator.canShare(shareData)){
+      navigator.share(shareData)
+        .then(()=>{ toast('נשלח: הדוח + '+photos.length+' תמונות ✓'); offerReset(); })
+        .catch(err=>{
+          if(err && err.name==='AbortError') return;     // המשתמש ביטל
+          openWaText(text); toast('נשלח כטקסט'); offerReset();
+        });
+      return;
+    }
+    // מכשיר בלי צירוף קבצים (בד"כ מחשב) — טקסט בלבד
     openWaText(text);
-    toast('מכשיר זה לא מאפשר צירוף תמונות מהדפדפן. הדוח הועתק ונפתח כטקסט');
+    toast('מכשיר זה שולח טקסט בלבד — לתמונות פתח בטלפון');
+    offerReset();
     return;
   }
 
-  const shareData={text, files:photos, title:'דוח סיור בטיחות'};
-  if(navigator.canShare && !navigator.canShare(shareData)){
-    openWaText(text);
-    toast('מכשיר זה לא מאפשר צירוף תמונות מהדפדפן. הדוח הועתק ונפתח כטקסט');
-    return;
-  }
-
-  navigator.share(shareData)
-    .then(()=>toast('נפתח שיתוף לדוח + תמונות'))
-    .catch(err=>{
-      if(err && err.name==='AbortError') return;     // המשתמש ביטל
-      openWaText(text);
-      toast('שיתוף תמונות לא נתמך כאן. הדוח הועתק ונפתח כטקסט');
-    });
+  // אין תמונות — הדוח כהודעת טקסט
+  openWaText(text);
+  toast('וואטסאפ נפתח עם הדוח');
+  offerReset();
 }
 
 /* פתיחת וואטסאפ עם הדוח כטקסט (בורר הקבוצות) */
