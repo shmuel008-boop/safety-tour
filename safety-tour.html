@@ -360,7 +360,7 @@ const ICON_SEND = `<svg viewBox="0 0 24 24" fill="none"><path d="M20 5 4 12l6 2 
 /* =========================================================================
    STATE
    ========================================================================= */
-const APP_VER = 'v12';   // מוצג במסך הסיכום — לוודא שהטלפון מריץ את הגרסה העדכנית
+const APP_VER = 'v13';   // מוצג במסך הסיכום — לוודא שהטלפון מריץ את הגרסה העדכנית
 const STORE_KEY = 'safetyTour_v1';
 let current = 0;
 let state = loadState();
@@ -776,14 +776,16 @@ function smartSend(){
   try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי
 
   if(photos.length && navigator.canShare){
-    const cap='🦺 תמונות מסיור נאמני בטיחות — הדוח המלא בהודעה הבאה 👇';
-    const shareData={files:photos, text:cap, title:'תמונות סיור בטיחות'};
+    // v13 — ניסוי: share אחד עם התמונות + הדוח המלא ככיתוב (בלי קפיצה שנייה).
+    // אם וואטסאפ מציג את הדוח שלם — אין מגבלת 1024 וזה הפתרון. אם חותך — המגבלה אמיתית.
+    const shareData={files:photos, text:text, title:'סיור נאמני בטיחות'};
     if(navigator.canShare(shareData)){
       navigator.share(shareData)
-        .then(()=>{ toast('התמונות נשלחו ✓ פותח את הדוח...'); armTextSend(text); })
+        .then(()=>{ toast('נשלח ✓'); offerReset(); })
         .catch(err=>{
           if(err && err.name==='AbortError') return;     // המשתמש ביטל
-          armTextSend(text);                              // נפילה חזרה — לפחות הטקסט
+          openWaText(text);                               // נפילה חזרה — לפחות הטקסט
+          offerReset();
         });
       return;
     }
