@@ -359,7 +359,7 @@ const ICON_SEND = `<svg viewBox="0 0 24 24" fill="none"><path d="M20 5 4 12l6 2 
 /* =========================================================================
    STATE
    ========================================================================= */
-const APP_VER = 'v10';   // מוצג במסך הסיכום — לוודא שהטלפון מריץ את הגרסה העדכנית
+const APP_VER = 'v11';   // מוצג במסך הסיכום — לוודא שהטלפון מריץ את הגרסה העדכנית
 const STORE_KEY = 'safetyTour_v1';
 let current = 0;
 let state = loadState();
@@ -692,7 +692,7 @@ function openSummary(){
     body.prepend(banner);
   }
   const nPhotos=Object.values(state.photos||{}).reduce((s,a)=>s+((a&&a.length)||0),0);
-  document.getElementById('waBtn').textContent = nPhotos ? `🟢 שלח בוואטסאפ (כולל ${nPhotos} תמונות)` : '🟢 שלח בוואטסאפ';
+  document.getElementById('waBtn').textContent = nPhotos ? `🟢 שלח הכול (${nPhotos} תמונות + דוח מלא)` : '🟢 שלח בוואטסאפ';
   document.getElementById('verInfo').textContent = `${APP_VER} · דוח: ${buildTextReport().length} תווים · ${nPhotos} תמונות`;
   sumBackdrop.classList.add('open');
 }
@@ -759,10 +759,14 @@ document.getElementById('copyBtn').onclick=()=>{
 document.getElementById('waBtn').onclick=smartSend;
 
 /* =========================================================================
-   שליחה — לחיצה אחת. הדוח המלא + התמונות בהודעה אחת:
-   navigator.share({text, files}) → וואטסאפ שולח תמונה עם הדוח ככיתוב (כיום
-   הכיתוב תומך באלפי תווים, אז הדוח המלא נכנס בלי חיתוך).
-   הדוח נשאר טקסט, התמונות תמונות. חשוב ל-iOS: נקרא סינכרונית בלי await לפניו.
+   שליחה — לחיצה אחת באתר, הכול זורם לבד:
+   וואטסאפ קוטם כיתוב-תמונה ב-1,024 תווים (הוכח 4.7: החיתוך נפל בדיוק על 1,024),
+   והדוח המלא ~1,500 — לכן אסור לשלוח אותו ככיתוב. הפתרון:
+   1) share של התמונות בלבד עם כיתוב קצר ("הדוח המלא בהודעה הבאה 👇").
+   2) כשוואטסאפ מסיים ומחזיר ל-Safari, ה-promise נפתר → ניווט אוטומטי ל-wa.me
+      עם הדוח המלא כהודעת טקסט (אין מגבלת אורך). ניווט ישיר לא דורש אישור-לחיצה
+      של iOS (בניגוד ל-share שני) — לכן זה עובד בלי שום לחיצה נוספת באתר.
+   חשוב ל-iOS: navigator.share נקרא סינכרונית בלי await לפניו.
    ========================================================================= */
 function smartSend(){
   const text=buildTextReport();
@@ -770,13 +774,18 @@ function smartSend(){
   try{ navigator.clipboard.writeText(text); }catch(e){}   // גיבוי
 
   if(photos.length && navigator.canShare){
-    const shareData={text, files:photos, title:'דוח סיור בטיחות'};
+    const cap='🦺 תמונות מסיור נאמני בטיחות — הדוח המלא בהודעה הבאה 👇';
+    const shareData={files:photos, text:cap, title:'תמונות סיור בטיחות'};
     if(navigator.canShare(shareData)){
       navigator.share(shareData)
-        .then(()=>{ toast('נשלח: הדוח + '+photos.length+' תמונות ✓'); offerReset(); })
+        .then(()=>{
+          // התמונות נשלחו; עכשיו הדוח המלא כטקסט — אוטומטית
+          toast('התמונות נשלחו ✓ פותח את הדוח המלא...');
+          setTimeout(()=>openWaTextAfterShare(text), 700);
+        })
         .catch(err=>{
           if(err && err.name==='AbortError') return;     // המשתמש ביטל
-          openWaText(text); toast('נשלח כטקסט'); offerReset();
+          openWaTextAfterShare(text);                     // נפילה חזרה — לפחות הטקסט
         });
       return;
     }
@@ -791,6 +800,15 @@ function smartSend(){
   openWaText(text);
   toast('וואטסאפ נפתח עם הדוח');
   offerReset();
+}
+
+/* אחרי share מוצלח: מרוקנים את הטופס (לפני שעוזבים את הדף!) ואז מנווטים
+   לוואטסאפ עם הדוח המלא. אם הניווט מחליף את הטאב — הטופס כבר נקי ושמור. */
+function openWaTextAfterShare(text){
+  try{ resetForm(); }catch(e){}
+  const url='https://wa.me/?text='+encodeURIComponent(text);
+  const w=window.open(url,'_blank');
+  if(!w){ window.location.href=url; }               // בלי אישור-לחיצה window.open לרוב חסום — ניווט ישיר תמיד עובד
 }
 
 /* פתיחת וואטסאפ עם הדוח כטקסט (בורר הקבוצות) */
